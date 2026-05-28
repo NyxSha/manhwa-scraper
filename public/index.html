@@ -22,7 +22,7 @@
                 </div>
                 <div>
                     <label class="block text-xs text-zinc-400 mb-1">Kaynak Site URL</label>
-                    <input type="text" id="target-site" class="w-full bg-zinc-950 border border-zinc-700 rounded p-2.5 text-white focus:border-amber-500 focus:outline-none" value="https://hentaixdickgirl.com">
+                    <input type="text" id="target-site" class="w-full bg-zinc-950 border border-zinc-700 rounded p-2.5 text-white focus:border-amber-500 focus:outline-none" value="https://manhwatop.com">
                 </div>
                 <button onclick="verifyAndConnect()" class="w-full bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold p-3 rounded transition">Sistemi Başlat</button>
                 <p id="auth-error" class="text-red-500 text-sm text-center hidden">Hatalı kod girdiniz!</p>
@@ -231,7 +231,7 @@
             }
         }
 
-        // 3. REKLAMSIZ OKUYUCU (Madara Teması / JSON + Regex Kırıcı)
+        // 3. REKLAMSIZ OKUYUCU (MUTLAK GÖRSEL ÇEKİCİ - DÜZELTİLMİŞ SÜRÜM)
         async function openChapter(encodedMangaUrl, encodedChapterUrl, encodedChTitle) {
             showSection('reader');
             
@@ -241,7 +241,7 @@
 
             const targetUrl = atob(encodedChapterUrl);
             const imgContainer = document.getElementById('chapter-images');
-            imgContainer.innerHTML = '<p class="text-center p-12 text-zinc-400">Gizli şifrelemeler kırılıyor, görseller sökülüyor...</p>';
+            imgContainer.innerHTML = '<p class="text-center p-12 text-zinc-400">Tüm engeller aşılıyor, görseller sökülüyor...</p>';
 
             try {
                 const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(targetUrl)}`);
@@ -249,20 +249,29 @@
 
                 let images = [];
 
-                // YÖNTEM 1: Standart DOM Tarayıcı
+                // YÖNTEM 1: Aşırı Agresif DOM Tarayıcı
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlText, 'text/html');
-                const chapterImgs = doc.querySelectorAll('.reading-content img, .wp-manga-chapter-img, .page-break img, #chapter-images img');
+                
+                // Neredeyse tüm manga temalarının resim tutucu div'leri
+                const chapterImgs = doc.querySelectorAll('.reading-content img, .wp-manga-chapter-img, .page-break img, #chapter-images img, .entry-content img, .text-left img, div[id^="image-"] img, .blocks-gallery-item img');
                 
                 chapterImgs.forEach(img => {
-                    let src = img.getAttribute('data-src') || img.getAttribute('src') || img.getAttribute('data-lazy-src') || '';
-                    if(src.startsWith('http') && !images.includes(src.trim())) {
-                        images.push(src.trim());
+                    // Sitenin lazy-load için kullanabileceği olası tüm nitelikler
+                    let src = img.getAttribute('data-src') || 
+                              img.getAttribute('data-lazy-src') || 
+                              img.getAttribute('data-cfsrc') || 
+                              img.getAttribute('src') || '';
+                    
+                    src = src.trim();
+                    if(src.startsWith('http') && !images.includes(src)) {
+                        images.push(src);
                     }
                 });
 
-                // YÖNTEM 2: Madara Teması "https:\/\/" formatını temizleyen kırıcı Regex
-                const rawRegex = /(https?[\\\/]+[^"'\s<>]+?\.(?:webp|jpg|jpeg|png))/gi;
+                // YÖNTEM 2: Tüm sayfanın kaynak kodunu tarayan Regex
+                // .webp, .jpg vb. uzantıların sonundaki ?v=123 gibi takıları da tolere eder.
+                const rawRegex = /(https?[\\\/]+[^"'\s<>]+?\.(?:webp|jpg|jpeg|png)(?:\?[^"'\s<>]+)?)/gi;
                 let match;
                 while ((match = rawRegex.exec(htmlText)) !== null) {
                     let imgUrl = match[1].replace(/\\/g, ''); 
@@ -271,20 +280,23 @@
                     }
                 }
 
-                // Logoları ve çöp dosyaları engelle
+                // ÇÖPLERİ FİLTRELE
                 images = images.filter(url => {
                     const lower = url.toLowerCase();
                     return !lower.includes('logo') && 
                            !lower.includes('avatar') && 
                            !lower.includes('icon') && 
                            !lower.includes('banner') &&
-                           !lower.includes('sidebar');
+                           !lower.includes('sidebar') &&
+                           !lower.includes('ads') &&
+                           !lower.includes('comment');
                 });
 
-                // Sıralama Algoritması: _001.webp gibi en sondaki dosya numarasına odaklanır
+                // AKILLI SIRALAMA DÜZELTİLDİ: URL'nin sonundaki "?" parametreleri bozmasın diye "$" işareti kaldırıldı
                 images.sort((a, b) => {
-                    const matchA = a.match(/(\d+)\.(?:webp|jpg|jpeg|png)$/i);
-                    const matchB = b.match(/(\d+)\.(?:webp|jpg|jpeg|png)$/i);
+                    // Örn: "001.webp" veya "001.webp?t=123" eşleşir
+                    const matchA = a.match(/(\d+)\.(?:webp|jpg|jpeg|png)/i);
+                    const matchB = b.match(/(\d+)\.(?:webp|jpg|jpeg|png)/i);
                     if (matchA && matchB) {
                         return parseInt(matchA[1], 10) - parseInt(matchB[1], 10);
                     }
