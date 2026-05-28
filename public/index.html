@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="no-referrer"> 
-    <title>Bypass Manhwa Reader</title>
+    <title>Bypass Manhwa Reader V3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #0c0c0e; color: #e4e4e7; font-family: sans-serif; }
@@ -67,7 +67,6 @@
         const TUNNEL_URL = `${window.location.origin}/api/tunnel?url=`;
         let currentTargetUrl = "";
 
-        // Özel şifreleme fonksiyonları (Unicode hatalarını engeller)
         const safeEncode = (str) => btoa(encodeURIComponent(str));
         const safeDecode = (str) => decodeURIComponent(atob(str));
 
@@ -99,7 +98,6 @@
             if(section === 'reader') document.getElementById('reader-section').classList.remove('hidden');
         }
 
-        // 1. ANA SAYFA YÜKLEME (DOZER TAKTİĞİ)
         async function loadLatest() {
             const listDiv = document.getElementById('manga-list-section');
             listDiv.innerHTML = '<p class="text-center col-span-full text-zinc-400 p-12">Agresif tarama modu aktif, ana sayfa taranıyor...</p>';
@@ -108,7 +106,6 @@
                 const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(currentTargetUrl)}`);
                 const htmlText = await res.text();
                 
-                // Cloudflare / Bot Koruması Yakalayıcı
                 if (htmlText.includes('Cloudflare') || htmlText.includes('Just a moment...') || htmlText.includes('captcha')) {
                     listDiv.innerHTML = '<p class="text-center col-span-full text-red-500 font-bold p-8">DİKKAT: Hedef site Cloudflare bot korumasını açmış. Sunucu tüneli engelleniyor!</p>';
                     return;
@@ -169,7 +166,6 @@
             }
         }
 
-        // 2. DETAY & BÖLÜM LİSTESİ
         async function openMangaDetail(encodedMangaUrl) {
             showSection('detail');
             document.getElementById('detail-title').innerText = "Bölümler taranıyor...";
@@ -235,7 +231,7 @@
             }
         }
 
-        // 3. REKLAMSIZ OKUYUCU (Geliştirilmiş Mutlak Çekici)
+        // 3. REKLAMSIZ OKUYUCU (TAM TEŞEKKÜLLÜ DOZER - V3)
         async function openChapter(encodedMangaUrl, encodedChapterUrl, encodedChTitle) {
             showSection('reader');
             
@@ -245,43 +241,71 @@
 
             const targetUrl = safeDecode(encodedChapterUrl);
             const imgContainer = document.getElementById('chapter-images');
-            imgContainer.innerHTML = '<p class="text-center p-12 text-zinc-400">Tüm engeller aşılıyor, görseller sökülüyor...</p>';
+            imgContainer.innerHTML = '<p class="text-center p-12 text-zinc-400 text-sm animate-pulse">4 Kademeli Derin Tarama başlatıldı, görseller aranıyor...</p>';
 
             try {
                 const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(targetUrl)}`);
                 const htmlText = await res.text();
 
                 let images = [];
-
-                // YÖNTEM 1: Aşırı Agresif DOM Tarayıcı
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlText, 'text/html');
+
+                // KADEME 1: MANGAKAL YAPI ANALİZİ (Doğal Sırayı Korur)
+                // Manga temalarının ana okuyucu div'lerini arar. Bulursa HTML akışındaki sırasıyla çeker.
+                const readerContainers = doc.querySelectorAll('.reading-content, #readerarea, .vung-doc, .container-chapter, .entry-content, .chap-content, .manga-reader, #chapter-images');
                 
-                const chapterImgs = doc.querySelectorAll('.reading-content img, .wp-manga-chapter-img, .page-break img, #chapter-images img, .entry-content img, .text-left img, div[id^="image-"] img, .blocks-gallery-item img');
-                
-                chapterImgs.forEach(img => {
-                    let src = img.getAttribute('data-src') || 
-                              img.getAttribute('data-lazy-src') || 
-                              img.getAttribute('data-cfsrc') || 
-                              img.getAttribute('src') || '';
-                    
-                    src = src.trim();
-                    if(src.startsWith('http') && !images.includes(src)) {
-                        images.push(src);
-                    }
+                readerContainers.forEach(container => {
+                    const imgs = container.querySelectorAll('img');
+                    imgs.forEach(img => {
+                        let src = img.getAttribute('data-src') || 
+                                  img.getAttribute('data-lazy-src') || 
+                                  img.getAttribute('data-cfsrc') || 
+                                  img.getAttribute('data-original') ||
+                                  img.getAttribute('src') || '';
+                        
+                        // Gereksiz tırnak, parantez veya boşlukları temizle
+                        src = src.trim().replace(/[\[\]"']/g, ''); 
+
+                        if (src.startsWith('http') && !images.includes(src)) {
+                            images.push(src);
+                        }
+                    });
                 });
 
-                // YÖNTEM 2: Kaynak Kod Regex Tarayıcı
-                const rawRegex = /(https?[\\\/]+[^"'\s<>]+?\.(?:webp|jpg|jpeg|png)(?:\?[^"'\s<>]+)?)/gi;
-                let match;
-                while ((match = rawRegex.exec(htmlText)) !== null) {
-                    let imgUrl = match[1].replace(/\\/g, ''); 
-                    if (!images.includes(imgUrl)) {
-                        images.push(imgUrl);
-                    }
+                // KADEME 2: JAVASCRIPT / JSON GİZLEME ANALİZİ (Eğer HTML'de yoksa Scriptleri Tara)
+                if (images.length === 0) {
+                    const scripts = doc.querySelectorAll('script');
+                    scripts.forEach(script => {
+                        const content = script.innerHTML;
+                        if (content.includes('ts_reader') || content.includes('chapter_preloaded_images') || content.includes('images:')) {
+                            const urlRegex = /(https?[\\\/]+[^"'\s<>\[\]{}]+?\.(?:webp|jpg|jpeg|png|avif|bmp)(?:\?[^"'\s<>]+)?)/gi;
+                            let match;
+                            while ((match = urlRegex.exec(content)) !== null) {
+                                let imgUrl = match[1].replace(/\\/g, '');
+                                if (!images.includes(imgUrl)) images.push(imgUrl);
+                            }
+                        }
+                    });
                 }
 
-                // ÇÖPLERİ FİLTRELE (Gelişmiş)
+                // KADEME 3: KABA KUVVET (Hiçbir div tutmadıysa, sayfadaki tüm resimleri zorla al)
+                if (images.length === 0) {
+                    const allImgs = doc.querySelectorAll('img');
+                    allImgs.forEach(img => {
+                        let src = img.getAttribute('data-src') || 
+                                  img.getAttribute('data-lazy-src') || 
+                                  img.getAttribute('data-cfsrc') || 
+                                  img.getAttribute('data-original') ||
+                                  img.getAttribute('src') || '';
+                        src = src.trim().replace(/[\[\]"']/g, '');
+                        if (src.startsWith('http') && !images.includes(src)) {
+                            images.push(src);
+                        }
+                    });
+                }
+
+                // ÇÖPLERİ FİLTRELE (Aşırı Gelişmiş Reklam ve Menü Temizleyici)
                 images = images.filter(url => {
                     const lower = url.toLowerCase();
                     return !lower.includes('logo') && 
@@ -291,26 +315,25 @@
                            !lower.includes('sidebar') &&
                            !lower.includes('ads') &&
                            !lower.includes('comment') &&
-                           !lower.includes('thumbnail');
-                });
-
-                // AKILLI SIRALAMA (Esnekleştirildi)
-                images.sort((a, b) => {
-                    const matchA = a.match(/(\d+)\.(?:webp|jpg|jpeg|png)/i);
-                    const matchB = b.match(/(\d+)\.(?:webp|jpg|jpeg|png)/i);
-                    if (matchA && matchB) {
-                        return parseInt(matchA[1], 10) - parseInt(matchB[1], 10);
-                    }
-                    // Eğer sayılarla isimlendirilmemişse, orijnal HTML sırasını koru
-                    return 0; 
+                           !lower.includes('thumbnail') &&
+                           !lower.includes('discord') &&
+                           !lower.includes('header') &&
+                           !lower.includes('footer');
                 });
 
                 imgContainer.innerHTML = '';
+                
+                // Hata tespiti: Site 18+ doğrulama duvarı mı çıkardı?
                 if(images.length === 0) {
-                    imgContainer.innerHTML = '<p class="text-center p-8 text-amber-500">Resimler okunamadı. Bölüm boş olabilir veya site koruması devrede.</p>';
+                    if(htmlText.includes('18+') || htmlText.includes('over 18') || htmlText.includes('age-verified')) {
+                        imgContainer.innerHTML = '<p class="text-center p-8 text-red-500 font-bold">HATA: Hedef site "18+ Yaş Doğrulama Duvarı" çıkardı. Sunucumuz tıklama yapamadığı için engelleniyor!</p>';
+                    } else {
+                        imgContainer.innerHTML = '<p class="text-center p-8 text-amber-500">Resimler okunamadı. Bölüm içerik olarak boş olabilir veya ağır bir JS şifrelemesi kullanılıyor.</p>';
+                    }
                     return;
                 }
 
+                // Ekrana bas (Otomatik sıralama kapatıldı, DOM'un doğal/gerçek sırası kullanılıyor)
                 images.forEach(imgUrl => {
                     imgContainer.innerHTML += `
                         <div class="w-full bg-zinc-950 flex justify-center border-b border-zinc-900/5">
