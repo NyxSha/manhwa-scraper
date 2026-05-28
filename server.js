@@ -3,31 +3,24 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const cors = require('cors');
 const path = require('path');
+const qs = require('qs'); // AJAX verisi göndermek için gerekli
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Gerçek bir Windows + Chrome tarayıcısının gönderdiği tüm gizli sinyaller
+// Gelişmiş Tarayıcı Başlıkları
 const getAdvancedHeaders = (targetUrl) => {
     const urlObj = new URL(targetUrl);
     return {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Accept-Encoding': 'gzip, deflate, br',
         'Referer': targetUrl,
         'Host': urlObj.host,
         'Connection': 'keep-alive',
-        'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-        'Sec-Ch-Ua-Mobile': '?0',
-        'Sec-Ch-Ua-Platform': '"Windows"',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1'
+        'X-Requested-With': 'XMLHttpRequest' // AJAX isteği olduğunu belirtir
     };
 };
 
@@ -36,19 +29,11 @@ app.get('/api/latest', async (req, res) => {
     const BASE_URL = req.query.target;
     if (!BASE_URL) return res.status(400).json({ error: 'URL eksik' });
 
-    console.log(`[İstek] Ana sayfa çekiliyor: ${BASE_URL}`);
-
     try {
-        const response = await axios.get(BASE_URL, { 
-            headers: getAdvancedHeaders(BASE_URL),
-            timeout: 12000,
-            validateStatus: false // 403 veya 503 gelse bile çökme, kodu oku
-        });
-
+        const response = await axios.get(BASE_URL, { headers: getAdvancedHeaders(BASE_URL), timeout: 12000 });
         const $ = cheerio.load(response.data);
         const manhwara = [];
 
-        // Detaylı seçici analizi
         $('.page-item-detail, .manga-item, .page-listing-item, .item-thumb').each((index, element) => {
             const titleElement = $(element).find('.post-title a, .title a, h3 a, h4 a');
             const title = titleElement.text().trim();
@@ -58,59 +43,85 @@ app.get('/api/latest', async (req, res) => {
             if (link) {
                 const match = link.match(/\/manga\/([^\/]+)/);
                 const slug = match ? match[1] : '';
-
                 if (slug && title && !manhwara.some(m => m.slug === slug)) {
                     manhwara.push({ title, img, slug });
                 }
             }
         });
-
-        console.log(`[Başarılı] ${manhwara.length} adet manga bulundu.`);
         res.json(manhwara.slice(0, 30));
     } catch (error) {
-        console.error(`[Hata] Ana sayfa çekilemedi: ${error.message}`);
-        res.status(500).json({ error: 'Kaynak siteye doğrudan bağlantı kurulamadı.' });
+        res.status(500).json({ error: 'Ana sayfa çekilemedi.' });
     }
 });
 
-// 2. MANHWA DETAY & BÖLÜM LİSTESİ
+// 2. MANHWA DETAY & DINAMIK BÖLÜM (CHAPTER) LİSTESİ KAZIMA (KRİTİK GÜNCELLEME)
 app.get('/api/manga/:slug', async (req, res) => {
     const BASE_URL = req.query.target;
     const { slug } = req.params;
     const targetUrl = `${BASE_URL}/manga/${slug}/`;
 
-    console.log(`[İstek] Detay sayfası çekiliyor: ${targetUrl}`);
-
     try {
-        const response = await axios.get(targetUrl, { 
-            headers: getAdvancedHeaders(targetUrl),
-            timeout: 12000,
-            validateStatus: false
-        });
-
+        // İlk olarak ana sayfayı çekip başlık ve kapak resmini alıyoruz
+        const response = await axios.get(targetUrl, { headers: getAdvancedHeaders(targetUrl), timeout: 12000 });
         const $ = cheerio.load(response.data);
-        const chapters = [];
+        
+        const titleText = $('h1').first().text().trim() || slug;
+        let coverImg = $('.summary_image img').attr('data-src') || $('.summary_image img').attr('src') || '';
+        
+        // Manga ID'sini HTML içerisinden kazıyoruz (AJAX isteği için şart)
+        const mangaId = $('.wp-manga-action-button').attr('data-post') || $('input.rating-post-id').val() || '';
+        
+        let chapters = [];
 
+        // EĞER DÜZ HTML İÇİNDE BÖLÜMLER VARSA ÖNCE ONLARI AL
         $('a').each((index, element) => {
             const href = $(element).attr('href');
             if (href && href.includes(slug) && (href.includes('chapter') || href.includes('bolum'))) {
                 const parts = href.replace(/\/$/, '').split('/');
                 const chSlug = parts[parts.length - 1];
                 const title = $(element).text().trim();
-
                 if (chSlug && title && !chapters.some(c => c.slug === chSlug)) {
                     chapters.push({ title, slug: chSlug });
                 }
             }
         });
 
-        const titleText = $('h1').first().text().trim() || slug;
-        let coverImg = $('.summary_image img').attr('data-src') || $('.summary_image img').attr('src') || '';
+        // EĞER BÖLÜM LİSTESİ BOŞSA (Dinamik AJAX Koruması Varsa) ARKA PLANDAN ÇEK
+        if (chapters.length === 0 && mangaId) {
+            console.log(`[AJAX Bypass] Manga ID bulundu: ${mangaId}, bölümler arka plandan isteniyor...`);
+            
+            const ajaxUrl = `${BASE_URL}/wp-admin/admin-ajax.php`;
+            const ajaxData = qs.stringify({
+                'action': 'manga_get_chapters',
+                'manga': mangaId
+            });
+
+            const ajaxResponse = await axios.post(ajaxUrl, ajaxData, {
+                headers: {
+                    ...getAdvancedHeaders(targetUrl),
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                timeout: 10000
+            });
+
+            const $ajax = cheerio.load(ajaxResponse.data);
+            $ajax('a').each((index, element) => {
+                const href = $ajax(element).attr('href');
+                if (href && href.includes('chapter')) {
+                    const parts = href.replace(/\/$/, '').split('/');
+                    const chSlug = parts[parts.length - 1];
+                    const title = $ajax(element).text().trim();
+                    if (chSlug && title && !chapters.some(c => c.slug === chSlug)) {
+                        chapters.push({ title, slug: chSlug });
+                    }
+                }
+            });
+        }
 
         res.json({ title: titleText, img: coverImg, chapters });
     } catch (error) {
-        console.error(`[Hata] Detay çekilemedi: ${error.message}`);
-        res.status(500).json({ error: 'Bölüm listesi alınamadı.' });
+        console.error("Detay sayfası hatası:", error.message);
+        res.status(500).json({ error: 'Bölüm listesi bypass edilemedi.' });
     }
 });
 
@@ -120,15 +131,8 @@ app.get('/api/chapter/:mangaSlug/:chapterSlug', async (req, res) => {
     const { mangaSlug, chapterSlug } = req.params;
     const targetUrl = `${BASE_URL}/manga/${mangaSlug}/${chapterSlug}/`;
 
-    console.log(`[İstek] Bölüm resimleri çekiliyor: ${targetUrl}`);
-
     try {
-        const response = await axios.get(targetUrl, { 
-            headers: getAdvancedHeaders(targetUrl),
-            timeout: 15000,
-            validateStatus: false
-        });
-
+        const response = await axios.get(targetUrl, { headers: getAdvancedHeaders(targetUrl), timeout: 15000 });
         const $ = cheerio.load(response.data);
         const images = [];
 
@@ -144,7 +148,6 @@ app.get('/api/chapter/:mangaSlug/:chapterSlug', async (req, res) => {
 
         res.json({ images });
     } catch (error) {
-        console.error(`[Hata] Resimler çekilemedi: ${error.message}`);
         res.status(500).json({ error: 'Resimler yüklenemedi.' });
     }
 });
@@ -154,4 +157,4 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Gelişmiş Doğrudan Tünel Aktif: ${PORT}`));
+app.listen(PORT, () => console.log(`Dinamik AJAX Destekli Tünel Aktif: ${PORT}`));
