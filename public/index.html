@@ -14,7 +14,7 @@
 
     <div id="auth-panel" class="fixed inset-0 bg-zinc-950 flex items-center justify-center z-50 p-4">
         <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl w-full max-w-md shadow-2xl">
-            <h2 class="text-xl font-bold text-amber-500 mb-4 text-center tracking-wider">HYBRID BYPASS PANEL</h2>
+            <h2 class="text-xl font-bold text-amber-500 mb-4 text-center tracking-wider">UNIVERSAL BYPASS PANEL</h2>
             <div class="space-y-4">
                 <div>
                     <label class="block text-xs text-zinc-400 mb-1">Giriş Kodu</label>
@@ -95,10 +95,10 @@
             if(section === 'reader') document.getElementById('reader-section').classList.remove('hidden');
         }
 
-        // 1. ANA SAYFAYI YÜKLE VE AYRIŞTIR
+        // 1. ANA SAYFA LİSTESİ (Esnek Link Yakalayıcı)
         async function loadLatest() {
             const listDiv = document.getElementById('manga-list-section');
-            listDiv.innerHTML = '<p class="text-center col-span-full text-zinc-400 p-12">Tünel üzerinden ana sayfa kazınıyor...</p>';
+            listDiv.innerHTML = '<p class="text-center col-span-full text-zinc-400 p-12">Ana sayfa listesi yükleniyor...</p>';
             
             try {
                 const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(currentTargetUrl)}`);
@@ -108,29 +108,39 @@
                 const doc = parser.parseFromString(htmlText, 'text/html');
                 const manhwara = [];
 
-                doc.querySelectorAll('.page-item-detail, .manga-item, .page-listing-item, .item-thumb').forEach(el => {
-                    const aTag = el.querySelector('.post-title a, .title a, h3 a, h4 a');
-                    if (!aTag) return;
-                    
-                    const title = aTag.innerText.trim();
+                doc.querySelectorAll('a').forEach(aTag => {
                     const href = aTag.getAttribute('href');
-                    const imgTag = el.querySelector('img');
-                    let img = imgTag ? (imgTag.getAttribute('data-src') || imgTag.getAttribute('src') || imgTag.getAttribute('data-lazy-src') || "") : "";
+                    if (!href) return;
 
-                    if (href && href.includes('/manga/')) {
-                        const match = href.match(/\/manga\/([^\/]+)/);
-                        const slug = match ? match[1] : '';
-                        if (slug && title && !manhwara.some(m => m.slug === slug)) {
+                    // Link yapısı kontrolü: Dış link değilse ve boş değilse al
+                    if (href.startsWith('http') && href.length > currentTargetUrl.length + 3) {
+                        const cleanHref = href.replace(/\/$/, "");
+                        const slug = cleanHref.substring(cleanHref.lastIndexOf('/') + 1);
+                        
+                        // Menü veya ana sayfa linklerini filtrele (Örn: /privacy, /genres, /bookmark gibi olmasın)
+                        const blacklist = ['privacy', 'terms', 'bookmark', 'genres', 'manga-list', 'history', 'home', 'login', 'register'];
+                        if(blacklist.includes(slug) || slug.includes('?')) return;
+
+                        const title = aTag.innerText.trim();
+                        const imgTag = aTag.querySelector('img') || aTag.closest('div')?.querySelector('img');
+                        let img = imgTag ? (imgTag.getAttribute('data-src') || imgTag.getAttribute('src') || imgTag.getAttribute('data-lazy-src') || "") : "";
+
+                        if (title && title.length > 2 && !manhwara.some(m => m.slug === slug)) {
                             manhwara.push({ title, img, slug });
                         }
                     }
                 });
 
                 listDiv.innerHTML = '';
+                if(manhwara.length === 0) {
+                    listDiv.innerHTML = '<p class="text-center col-span-full text-zinc-500 p-8">Siteden manga listesi süzülemedi. HTML yapısı çok farklı.</p>';
+                    return;
+                }
+
                 manhwara.forEach(manga => {
                     listDiv.innerHTML += `
                         <div class="bg-zinc-900 rounded-lg overflow-hidden shadow-lg cursor-pointer hover:scale-105 transition duration-300 border border-zinc-800" onclick="openMangaDetail('${manga.slug}')">
-                            <img src="${manga.img}" class="w-full h-72 object-cover" onerror="this.src='https://placehold.co/300x450/18181b/71717a?text=Kapak'">
+                            <img src="${manga.img}" class="w-full h-72 object-cover" onerror="this.src='https://placehold.co/300x450/18181b/71717a?text=Manga'">
                             <div class="p-3">
                                 <h3 class="text-sm font-bold text-center line-clamp-2 text-zinc-200">${manga.title}</h3>
                             </div>
@@ -138,18 +148,19 @@
                     `;
                 });
             } catch (e) {
-                listDiv.innerHTML = '<p class="text-center col-span-full text-red-500 p-8">Hata: Ana sayfa yüklenemedi.</p>';
+                listDiv.innerHTML = '<p class="text-center col-span-full text-red-500 p-8">Hata: Bağlantı tüneli başarısız.</p>';
             }
         }
 
-        // 2. MANHWA DETAY & BÖLÜM LİSTESİ (ÇÖKMEYEN SÜRÜM)
+        // 2. DETAY & BÖLÜM LİSTESİ (Yeni Esnek URL Filtresi)
         async function openMangaDetail(slug) {
             showSection('detail');
-            document.getElementById('detail-title').innerText = "Bölüm yapısı çözülüyor...";
+            document.getElementById('detail-title').innerText = "Bölümler taranıyor...";
             document.getElementById('detail-chapters').innerHTML = "";
             
             try {
-                const targetUrl = `${currentTargetUrl}/manga/${slug}/`;
+                // Link yapısını dinamik kuruyoruz: site.com/manga-ismi
+                const targetUrl = `${currentTargetUrl}/${slug}/`;
                 const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(targetUrl)}`);
                 const htmlText = await res.text();
 
@@ -157,20 +168,30 @@
                 const doc = parser.parseFromString(htmlText, 'text/html');
 
                 const titleText = doc.querySelector('h1')?.innerText?.trim() || slug;
-                const coverImg = doc.querySelector('.summary_image img')?.getAttribute('data-src') || doc.querySelector('.summary_image img')?.getAttribute('src') || '';
+                const coverImg = doc.querySelector('.summary_image img, .manga-poster img, img')?.getAttribute('data-src') || doc.querySelector('img')?.getAttribute('src') || '';
                 
                 document.getElementById('detail-title').innerText = titleText;
                 document.getElementById('detail-cover').src = coverImg;
 
                 const chapters = [];
-                // Sayfadaki tüm olası bölüm linklerini tara
                 doc.querySelectorAll('a').forEach(a => {
                     const href = a.getAttribute('href');
-                    if (href && href.includes(slug) && (href.includes('chapter') || href.includes('bolum'))) {
+                    if (!href) return;
+
+                    const lowerHref = href.toLowerCase();
+                    // Akıllı Kontrol: Linkin içinde manga adı geçiyorsa VE (chapter, bolum, oneshot, ch, blm) kelimeleri barındırıyorsa
+                    const isChapterLink = lowerHref.includes('chapter') || 
+                                          lowerHref.includes('bolum') || 
+                                          lowerHref.includes('oneshot') || 
+                                          lowerHref.includes('/ch') || 
+                                          lowerHref.includes('-ch-');
+
+                    if (lowerHref.includes(slug.toLowerCase()) && isChapterLink) {
                         const parts = href.replace(/\/$/, '').split('/');
-                        const chSlug = parts[parts.length - 1];
-                        const title = a.innerText.trim();
-                        if (chSlug && title && !chapters.some(c => c.slug === chSlug)) {
+                        const chSlug = parts[parts.length - 1]; // Örn: oneshot veya chapter-1
+                        const title = a.innerText.trim() || chSlug.toUpperCase();
+                        
+                        if (chSlug && !chapters.some(c => c.slug === chSlug)) {
                             chapters.push({ title, slug: chSlug });
                         }
                     }
@@ -178,11 +199,10 @@
 
                 const chaptersDiv = document.getElementById('detail-chapters');
                 if(chapters.length === 0) {
-                    chaptersDiv.innerHTML = '<p class="text-zinc-500 p-4">Bu manga için doğrudan bölüm linki bulunamadı. Site korumalı olabilir.</p>';
+                    chaptersDiv.innerHTML = '<p class="text-amber-500 p-4">Bölüm linki otomatik süzülemedi. Lütfen site adresini kontrol edin.</p>';
                     return;
                 }
 
-                // Bölümleri kronolojik sırala ve bas
                 chapters.forEach(ch => {
                     chaptersDiv.innerHTML += `
                         <button onclick="openChapter('${slug}', '${ch.slug}')" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm p-2.5 rounded text-left transition truncate">
@@ -195,17 +215,18 @@
             }
         }
 
-        // 3. REKLAMSIZ BÖLÜM RESİMLERİ
+        // 3. REKLAMSIZ OKUYUCU
         async function openChapter(mangaSlug, chapterSlug) {
             showSection('reader');
             document.getElementById('reader-chapter-title').innerText = `${chapterSlug.toUpperCase()}`;
             document.getElementById('reader-back-btn').onclick = () => openMangaDetail(mangaSlug);
 
             const imgContainer = document.getElementById('chapter-images');
-            imgContainer.innerHTML = '<p class="text-center p-12 text-zinc-400">Görseller tünelden geçiriliyor...</p>';
+            imgContainer.innerHTML = '<p class="text-center p-12 text-zinc-400">Sayfalar reklamlardan arındırılıyor...</p>';
 
             try {
-                const targetUrl = `${currentTargetUrl}/manga/${mangaSlug}/${chapterSlug}/`;
+                // Link yapısı dinamik birleşiyor: site.com/manga-ismi/bölüm-ismi
+                const targetUrl = `${currentTargetUrl}/${mangaSlug}/${chapterSlug}/`;
                 const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(targetUrl)}`);
                 const htmlText = await res.text();
 
@@ -216,8 +237,9 @@
                 doc.querySelectorAll('img').forEach(img => {
                     let src = img.getAttribute('data-src') || img.getAttribute('src') || img.getAttribute('data-lazy-src') || '';
                     if (src && src.startsWith('http')) {
-                        const isMangaImg = src.includes('manga') || src.includes('chapter') || src.includes('uploads') || img.classList.contains('wp-manga-chapter-img');
-                        if (isMangaImg && !images.includes(src)) {
+                        // Logo, avatar veya ikonları hariç tutan akıllı resim süzücü
+                        const isGarbage = src.includes('logo') || src.includes('avatar') || src.includes('icon') || src.includes('banner');
+                        if (!isGarbage && !images.includes(src)) {
                             images.push(src.trim());
                         }
                     }
@@ -225,7 +247,7 @@
 
                 imgContainer.innerHTML = '';
                 if(images.length === 0) {
-                    imgContainer.innerHTML = '<p class="text-center p-8 text-amber-500">Bölüm resimleri bu siteden süzülemedi.</p>';
+                    imgContainer.innerHTML = '<p class="text-center p-8 text-amber-500">Resimler bu sayfadan ayıklanamadı.</p>';
                     return;
                 }
                 
@@ -234,7 +256,7 @@
                 });
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             } catch (e) {
-                imgContainer.innerHTML = '<p class="text-center text-red-500 p-4">Bölüm resimleri çekilirken tünel hatası oluştu.</p>';
+                imgContainer.innerHTML = '<p class="text-center text-red-500 p-4">Tünelden resimler çekilirken hata oluştu.</p>';
             }
         }
     </script>
