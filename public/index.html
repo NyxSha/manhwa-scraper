@@ -22,7 +22,7 @@
                 </div>
                 <div>
                     <label class="block text-xs text-zinc-400 mb-1">Kaynak Site URL</label>
-                    <input type="text" id="target-site" class="w-full bg-zinc-950 border border-zinc-700 rounded p-2.5 text-white focus:border-amber-500 focus:outline-none" value="https://manhwatop.com">
+                    <input type="text" id="target-site" class="w-full bg-zinc-950 border border-zinc-700 rounded p-2.5 text-white focus:border-amber-500 focus:outline-none" value="https://hentaixdickgirl.com">
                 </div>
                 <button onclick="verifyAndConnect()" class="w-full bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold p-3 rounded transition">Sistemi Başlat</button>
                 <p id="auth-error" class="text-red-500 text-sm text-center hidden">Hatalı kod girdiniz!</p>
@@ -67,6 +67,10 @@
         const TUNNEL_URL = `${window.location.origin}/api/tunnel?url=`;
         let currentTargetUrl = "";
 
+        // Özel şifreleme fonksiyonları (Unicode hatalarını engeller)
+        const safeEncode = (str) => btoa(encodeURIComponent(str));
+        const safeDecode = (str) => decodeURIComponent(atob(str));
+
         function verifyAndConnect() {
             const code = document.getElementById('secret-code').value;
             if(code === "123456") {
@@ -95,7 +99,7 @@
             if(section === 'reader') document.getElementById('reader-section').classList.remove('hidden');
         }
 
-        // 1. ANA SAYFA YÜKLEME (DOZER TAKTİĞİ: Sınıfları Boşverip Tüm Linkleri Taramak)
+        // 1. ANA SAYFA YÜKLEME (DOZER TAKTİĞİ)
         async function loadLatest() {
             const listDiv = document.getElementById('manga-list-section');
             listDiv.innerHTML = '<p class="text-center col-span-full text-zinc-400 p-12">Agresif tarama modu aktif, ana sayfa taranıyor...</p>';
@@ -148,7 +152,7 @@
                 }
 
                 manhwara.forEach(manga => {
-                    const encodedUrl = btoa(manga.fullUrl);
+                    const encodedUrl = safeEncode(manga.fullUrl);
                     listDiv.innerHTML += `
                         <div class="bg-zinc-900 rounded-lg overflow-hidden shadow-lg cursor-pointer hover:scale-105 transition duration-300 border border-zinc-800 flex flex-col justify-between" onclick="openMangaDetail('${encodedUrl}')">
                             <div class="w-full h-72 bg-zinc-950 overflow-hidden relative">
@@ -165,13 +169,13 @@
             }
         }
 
-        // 2. DETAY & BÖLÜM LİSTESİ (Mutlak URL Kopyalama)
+        // 2. DETAY & BÖLÜM LİSTESİ
         async function openMangaDetail(encodedMangaUrl) {
             showSection('detail');
             document.getElementById('detail-title').innerText = "Bölümler taranıyor...";
             document.getElementById('detail-chapters').innerHTML = "";
             
-            const targetUrl = atob(encodedMangaUrl);
+            const targetUrl = safeDecode(encodedMangaUrl);
             
             try {
                 const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(targetUrl)}`);
@@ -217,8 +221,8 @@
                 }
 
                 chapters.forEach(ch => {
-                    const encodedChUrl = btoa(ch.fullUrl);
-                    const encodedChTitle = btoa(encodeURIComponent(ch.title));
+                    const encodedChUrl = safeEncode(ch.fullUrl);
+                    const encodedChTitle = safeEncode(ch.title);
                     
                     chaptersDiv.innerHTML += `
                         <button onclick="openChapter('${encodedMangaUrl}', '${encodedChUrl}', '${encodedChTitle}')" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs p-3 rounded text-left transition truncate border border-zinc-700 shadow-sm">
@@ -231,15 +235,15 @@
             }
         }
 
-        // 3. REKLAMSIZ OKUYUCU (MUTLAK GÖRSEL ÇEKİCİ - DÜZELTİLMİŞ SÜRÜM)
+        // 3. REKLAMSIZ OKUYUCU (Geliştirilmiş Mutlak Çekici)
         async function openChapter(encodedMangaUrl, encodedChapterUrl, encodedChTitle) {
             showSection('reader');
             
-            const chapterTitle = decodeURIComponent(atob(encodedChTitle));
+            const chapterTitle = safeDecode(encodedChTitle);
             document.getElementById('reader-chapter-title').innerText = chapterTitle;
             document.getElementById('reader-back-btn').onclick = () => openMangaDetail(encodedMangaUrl);
 
-            const targetUrl = atob(encodedChapterUrl);
+            const targetUrl = safeDecode(encodedChapterUrl);
             const imgContainer = document.getElementById('chapter-images');
             imgContainer.innerHTML = '<p class="text-center p-12 text-zinc-400">Tüm engeller aşılıyor, görseller sökülüyor...</p>';
 
@@ -253,11 +257,9 @@
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlText, 'text/html');
                 
-                // Neredeyse tüm manga temalarının resim tutucu div'leri
                 const chapterImgs = doc.querySelectorAll('.reading-content img, .wp-manga-chapter-img, .page-break img, #chapter-images img, .entry-content img, .text-left img, div[id^="image-"] img, .blocks-gallery-item img');
                 
                 chapterImgs.forEach(img => {
-                    // Sitenin lazy-load için kullanabileceği olası tüm nitelikler
                     let src = img.getAttribute('data-src') || 
                               img.getAttribute('data-lazy-src') || 
                               img.getAttribute('data-cfsrc') || 
@@ -269,8 +271,7 @@
                     }
                 });
 
-                // YÖNTEM 2: Tüm sayfanın kaynak kodunu tarayan Regex
-                // .webp, .jpg vb. uzantıların sonundaki ?v=123 gibi takıları da tolere eder.
+                // YÖNTEM 2: Kaynak Kod Regex Tarayıcı
                 const rawRegex = /(https?[\\\/]+[^"'\s<>]+?\.(?:webp|jpg|jpeg|png)(?:\?[^"'\s<>]+)?)/gi;
                 let match;
                 while ((match = rawRegex.exec(htmlText)) !== null) {
@@ -280,7 +281,7 @@
                     }
                 }
 
-                // ÇÖPLERİ FİLTRELE
+                // ÇÖPLERİ FİLTRELE (Gelişmiş)
                 images = images.filter(url => {
                     const lower = url.toLowerCase();
                     return !lower.includes('logo') && 
@@ -289,18 +290,19 @@
                            !lower.includes('banner') &&
                            !lower.includes('sidebar') &&
                            !lower.includes('ads') &&
-                           !lower.includes('comment');
+                           !lower.includes('comment') &&
+                           !lower.includes('thumbnail');
                 });
 
-                // AKILLI SIRALAMA DÜZELTİLDİ: URL'nin sonundaki "?" parametreleri bozmasın diye "$" işareti kaldırıldı
+                // AKILLI SIRALAMA (Esnekleştirildi)
                 images.sort((a, b) => {
-                    // Örn: "001.webp" veya "001.webp?t=123" eşleşir
                     const matchA = a.match(/(\d+)\.(?:webp|jpg|jpeg|png)/i);
                     const matchB = b.match(/(\d+)\.(?:webp|jpg|jpeg|png)/i);
                     if (matchA && matchB) {
                         return parseInt(matchA[1], 10) - parseInt(matchB[1], 10);
                     }
-                    return 0;
+                    // Eğer sayılarla isimlendirilmemişse, orijnal HTML sırasını koru
+                    return 0; 
                 });
 
                 imgContainer.innerHTML = '';
