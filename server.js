@@ -1,148 +1,82 @@
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const cors = require('cors');
 const path = require('path');
-require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(express.static('public'));
+// CORS ve JSON ayarları
+app.use(cors());
 app.use(express.json());
 
-// Rate limiting and caching
-const cache = new Map();
-const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+// Klasörümüzdeki HTML/CSS dosyalarını dışarıya açıyoruz
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Helper function to fetch with user-agent
-const fetchWithUserAgent = async (url) => {
+const BASE_URL = 'https://manhwatop.com';
+
+// 1. Ana Sayfadaki Güncel Manhwaları Listeleme API'si
+app.get('/api/latest', async (req, res) => {
     try {
-        const response = await axios.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            },
-            timeout: 10000
-        });
-        return response;
-    } catch (error) {
-        console.error(`Error fetching ${url}:`, error.message);
-        throw error;
-    }
-};
-
-// Get from cache
-const getFromCache = (key) => {
-    const cached = cache.get(key);
-    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-        return cached.data;
-    }
-    cache.delete(key);
-    return null;
-};
-
-// Set in cache
-const setInCache = (key, data) => {
-    cache.set(key, {
-        data,
-        timestamp: Date.now()
-    });
-};
-
-// API Routes
-
-// Search endpoint
-app.get('/api/search', async (req, res) => {
-    try {
-        const query = req.query.q;
-        
-        if (!query || query.trim() === '') {
-            return res.status(400).json({ error: 'Search query is required' });
-        }
-
-        // Check cache
-        const cacheKey = `search_${query.toLowerCase()}`;
-        const cachedResults = getFromCache(cacheKey);
-        if (cachedResults) {
-            return res.json(cachedResults);
-        }
-
-        // Example: Scrape from a manhwa website (Replace with actual site)
-        const results = await scrapeResults(query);
-
-        // Store in cache
-        setInCache(cacheKey, results);
-
-        res.json(results);
-    } catch (error) {
-        console.error('Search error:', error);
-        res.status(500).json({ error: 'Failed to search. Please try again.' });
-    }
-});
-
-// Scrape results function
-async function scrapeResults(query) {
-    const results = [];
-    
-    try {
-        // Example using MangaReader API or similar
-        // This is a placeholder - replace with actual scraping logic
-        
-        // Simulated results for demonstration
-        const mockResults = [
-            {
-                title: `${query} - Result 1`,
-                author: 'Author Name',
-                status: 'Ongoing',
-                rating: '8.5',
-                description: 'A great manhwa to read'
-            },
-            {
-                title: `${query} - Result 2`,
-                author: 'Another Author',
-                status: 'Completed',
-                rating: '9.0',
-                description: 'Amazing story'
+        const { data } = await axios.get(BASE_URL, {
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9'
             }
-        ];
+        });
+        const $ = cheerio.load(data);
+        const manhwara = [];
 
-        // Filter to match query
-        return mockResults.filter(item => 
-            item.title.toLowerCase().includes(query.toLowerCase())
-        );
+        $('.page-item-detail').each((index, element) => {
+            const title = $(element).find('.post-title a').text().trim();
+            const link = $(element).find('.post-title a').attr('href');
+            const img = $(element).find('img').attr('src') || $(element).find('img').attr('data-src');
+            
+            // Slug oluşturma (Detay sayfasına gitmek için id)
+            const slug = link ? link.replace(BASE_URL + '/manga/', '').replace(/\/$/, '') : '';
 
+            if (title && slug) {
+                manhwara.push({ title, img, slug });
+            }
+        });
+
+        res.json(manhwara);
     } catch (error) {
-        console.error('Scraping error:', error);
-        throw error;
+        console.error("Scraping Hatası:", error.message);
+        res.status(500).json({ error: 'Veri çekilirken bir hata oluştu.' });
     }
-}
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Clear cache endpoint (optional)
-app.post('/api/cache/clear', (req, res) => {
-    cache.clear();
-    res.json({ message: 'Cache cleared' });
+// 2. Bölüm (Chapter) Resimlerini Çekme API'si
+app.get('/api/chapter/:mangaSlug/:chapterSlug', async (req, res) => {
+    const { mangaSlug, chapterSlug } = req.params;
+    const targetUrl = `${BASE_URL}/manga/${mangaSlug}/${chapterSlug}/`;
+
+    try {
+        const { data } = await axios.get(targetUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        });
+        const $ = cheerio.load(data);
+        const images = [];
+
+        $('.page-break img').each((index, element) => {
+            let imgUrl = $(element).attr('src') || $(element).attr('data-src');
+            if (imgUrl) {
+                images.push(imgUrl.trim());
+            }
+        });
+
+        res.json({ chapter: chapterSlug, images });
+    } catch (error) {
+        res.status(500).json({ error: 'Bölüm resimleri çekilemedi.' });
+    }
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-    console.error(err);
-    res.status(500).json({ error: 'Internal server error' });
+// Herhangi bir API dışı istek gelirse ana sayfayı (index.html) göster
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({ error: 'Not found' });
-});
-
-// Start server
-app.listen(PORT, () => {
-    console.log(`🚀 Manhwa Scraper running on http://localhost:${PORT}`);
-    console.log(`📚 Open your browser and navigate to http://localhost:${PORT}`);
-});
-
-module.exports = app;
+// Render.com için Port Ayarı (Çok Önemli)
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Sunucu ${PORT} portunda aktif.`));
