@@ -1,113 +1,164 @@
 const express = require('express');
-const axios = require('axios');
-const cheerio = require('cheerio');
 const cors = require('cors');
 const path = require('path');
+const puppeteer = require('puppeteer');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Gerçek tarayıcı taklidi (Bypass için optimize edildi)
-const getHeaders = (target) => ({
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
-    'Referer': target,
-    'Origin': target
-});
+// Ortak Tarayıcı Başlatma Fonksiyonu
+async function getBrowserPage() {
+    const browser = await puppeteer.launch({
+        headless: "new",
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-blink-features=AutomationControlled' // Bot algılayıcıyı kapatır
+        ]
+    });
+    const page = await browser.newPage();
+    // Gerçek kullanıcı kimliği süsü verme
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+    await page.setViewport({ width: 1280, height: 800 });
+    return { browser, page };
+}
 
-// 1. ANA SAYFA KAZIMA
+// 1. ANA SAYFA KAZIMA (Esnek Seçicili)
 app.get('/api/latest', async (req, res) => {
     const BASE_URL = req.query.target;
-    if (!BASE_URL) return res.status(400).json({ error: 'Hedef URL eksik.' });
+    if (!BASE_URL) return res.status(400).json({ error: 'URL eksik' });
 
+    let instance;
     try {
-        const { data } = await axios.get(BASE_URL, { headers: getHeaders(BASE_URL), timeout: 10000 });
-        const $ = cheerio.load(data);
-        const manhwara = [];
+        instance = await getBrowserPage();
+        await instance.page.goto(BASE_URL, { waitUntil: 'networkidle2', timeout: 30000 });
 
-        $('.page-item-detail, .manga-item, .page-listing-item').each((index, element) => {
-            const titleElement = $(element).find('.post-title a, .title a, h3 a');
-            const title = titleElement.text().trim();
-            const link = titleElement.attr('href');
-            let img = $(element).find('img').attr('data-src') || $(element).find('img').attr('src') || $(element).find('img').attr('data-lazy-src');
-            
-            if (link) {
-                const match = link.match(/\/manga\/([^\/]+)/);
-                const slug = match ? match[1] : '';
-                if (title && slug) {
-                    manhwara.push({ title, img, slug });
+        // Sayfadaki linkleri ve resimleri yapıdan bağımsız akıllıca tara
+        const manhwara = await instance.page.evaluate(() => {
+            const results = [];
+            // Sayfadaki tüm linkleri incele
+            document.querySelectorAll('a').forEach(a => {
+                const href = a.href;
+                if (href && href.includes('/manga/')) {
+                    const img = a.querySelector('img');
+                    const title = a.innerText.trim() || (img ? img.alt : '');
+                    
+                    if (title && title.length > 2) {
+                        const slugMatch = href.match(/\/manga\/([^\/]+)/);
+                        const slug = slugMatch ? slugMatch[1] : '';
+                        
+                        let imgSrc = img ? (img.getAttribute('data-src') || img.getAttribute('src') || img.getAttribute('data-lazy-src')) : '';
+                        
+                        if (slug && !results.some(r => r.slug === slug)) {
+                            results.push({ title, img: imgSrc, slug });
+                        }
+                    }
                 }
-            }
+            });
+            return results.slice(0, 30); // İlk 30 tanesini getir
         });
 
         res.json(manhwara);
     } catch (error) {
-        res.status(500).json({ error: 'Ana sayfa kazınamadı.' });
+        res.status(500).json({ error: 'Ana sayfa bypass edilemedi: ' + error.message });
+    } finally {
+        if (instance) await instance.browser.close();
     }
 });
 
-// 2. MANHWA DETAY & BÖLÜM (CHAPTER) LİSTESİ KAZIMA
+// 2. MANHWA DETAY & BÖLÜM LİSTESİ (Esnek Yapı)
 app.get('/api/manga/:slug', async (req, res) => {
     const BASE_URL = req.query.target;
     const { slug } = req.params;
     const targetUrl = `${BASE_URL}/manga/${slug}/`;
 
+    let instance;
     try {
-        const { data } = await axios.get(targetUrl, { headers: getHeaders(BASE_URL), timeout: 10000 });
-        const $ = cheerio.load(data);
-        const chapters = [];
+        instance = await getBrowserPage();
+        await instance.page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
-        // Madara temasındaki bölüm listesi seçicileri (.wp-manga-chapter veya li.wp-manga-chapter)
-        $('.wp-manga-chapter, .chapter-item, li.a-h').each((index, element) => {
-            const aTag = $(element).find('a');
-            const chapterTitle = aTag.text().trim();
-            const link = aTag.attr('href');
-
-            if (link) {
-                // Linkin sonundaki bölüm slug'ını al (Örn: chapter-1)
-                const parts = link.replace(/\/$/, '').split('/');
-                const chapterSlug = parts[parts.length - 1];
-                
-                if (chapterTitle && chapterSlug) {
-                    chapters.push({ title: chapterTitle, slug: chapterSlug });
+        const data = await instance.page.evaluate((mangaSlug) => {
+            const chapters = [];
+            // Sayfadaki tüm linklerden içinde 'chapter' geçenleri veya bölümleri yakala
+            document.querySelectorAll('a').forEach(a => {
+                const href = a.href;
+                if (href && (href.includes(mangaSlug) && (href.includes('chapter') || href.includes('bolum')))) {
+                    const parts = href.replace(/\/$/, '').split('/');
+                    const chSlug = parts[parts.length - 1];
+                    const title = a.innerText.trim();
+                    
+                    if (chSlug && title && !chapters.some(c => c.slug === chSlug)) {
+                        chapters.push({ title, slug: chSlug });
+                    }
                 }
-            }
-        });
+            });
 
-        // Kapak görseli ve başlığı detay sayfasından da doğrula
-        const mainTitle = $('.post-title h1').text().trim() || $('.manga-title-text').text().trim() || slug;
-        const coverImg = $('.summary_image img').attr('data-src') || $('.summary_image img').attr('src');
+            const titleText = document.querySelector('h1')?.innerText || mangaSlug;
+            const mainImg = document.querySelector('.summary_image img, .manga-poster img')?.src || '';
 
-        res.json({ title: mainTitle, img: coverImg, chapters });
+            return { title: titleText, img: mainImg, chapters };
+        }, slug);
+
+        res.json(data);
     } catch (error) {
-        res.status(500).json({ error: 'Manga detayları ve bölümleri çekilemedi.' });
+        res.status(500).json({ error: 'Bölümler çekilemedi.' });
+    } finally {
+        if (instance) await instance.browser.close();
     }
 });
 
-// 3. SEÇİLEN BÖLÜMÜN RESİMLERİNİ KAZIMA
+// 3. BÖLÜM RESİMLERİNİ BYPASS EDEREK ÇEKME (EN KRİTİK YER)
 app.get('/api/chapter/:mangaSlug/:chapterSlug', async (req, res) => {
     const BASE_URL = req.query.target;
     const { mangaSlug, chapterSlug } = req.params;
     const targetUrl = `${BASE_URL}/manga/${mangaSlug}/${chapterSlug}/`;
 
+    let instance;
     try {
-        const { data } = await axios.get(targetUrl, { headers: getHeaders(BASE_URL), timeout: 10000 });
-        const $ = cheerio.load(data);
-        const images = [];
+        instance = await getBrowserPage();
+        await instance.page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 40000 });
 
-        $('.page-break img, .reading-content img, .wp-manga-chapter-img').each((index, element) => {
-            let imgUrl = $(element).attr('data-src') || $(element).attr('src') || $(element).attr('data-lazy-src');
-            if (imgUrl) {
-                images.push(imgUrl.trim());
-            }
+        // Sayfayı yavaşça aşağı kaydır (Lazy-load resimlerin yüklenmesini tetikler)
+        await instance.page.evaluate(async () => {
+            await new Promise((resolve) => {
+                let totalHeight = 0;
+                let distance = 400;
+                let timer = setInterval(() => {
+                    let scrollHeight = document.body.scrollHeight;
+                    window.scrollBy(0, distance);
+                    totalHeight += distance;
+
+                    if(totalHeight >= scrollHeight || totalHeight > 20000){ // Çok uzunsa dur
+                        clearInterval(timer);
+                        resolve();
+                    }
+                }, 100);
+            });
+        });
+
+        // Yapıdan bağımsız olarak sayfadaki TÜM gerçek manga resimlerini ayırt etme algoritması
+        const images = await instance.page.evaluate(() => {
+            const validImages = [];
+            document.querySelectorAll('img').forEach(img => {
+                let src = img.getAttribute('data-src') || img.src || img.getAttribute('data-lazy-src');
+                if (src && src.startsWith('http')) {
+                    // Genişliği veya yüksekliği büyük olan, logo veya reklam olmayan resimleri seç
+                    const isMangaImg = src.includes('manga') || src.includes('chapter') || src.includes('wp-content/uploads') || img.className.includes('chapter');
+                    if (isMangaImg && !validImages.includes(src)) {
+                        validImages.push(src.trim());
+                    }
+                }
+            });
+            return validImages;
         });
 
         res.json({ images });
     } catch (error) {
-        res.status(500).json({ error: 'Bölüm resimleri yüklenemedi.' });
+        res.status(500).json({ error: 'Resimler bypass edilemedi.' });
+    } finally {
+        if (instance) await instance.browser.close();
     }
 });
 
@@ -116,4 +167,4 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Sunucu aktif: ${PORT}`));
+app.listen(PORT, () => console.log(`Bypass Sunucusu Ayakta: ${PORT}`));
