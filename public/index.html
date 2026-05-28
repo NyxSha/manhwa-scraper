@@ -3,73 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bypass Manhwa Reader</title>
+    <title>Reklamsız Manhwa Okuyucu</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #0b0b0e; color: #e4e4e7; }
+        body { background-color: #0d0d11; color: #e4e4e7; font-family: sans-serif; }
     </style>
 </head>
 <body>
 
-    <!-- 1. GİRİŞ VE AYAR EKRANI (AUTH PANEL) -->
     <div id="auth-panel" class="fixed inset-0 bg-zinc-950 flex items-center justify-center z-50 p-4">
         <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl w-full max-w-md shadow-2xl">
-            <h2 class="text-xl font-bold text-amber-500 mb-4 text-center tracking-wider">GİZLİ ERİŞİM PANELİ</h2>
-            
+            <h2 class="text-xl font-bold text-amber-500 mb-4 text-center tracking-wider">GİZLİ SİSTEM PANELİ</h2>
             <div class="space-y-4">
                 <div>
                     <label class="block text-xs text-zinc-400 mb-1">Giriş Kodu</label>
-                    <input type="password" id="secret-code" class="w-full bg-zinc-950 border border-zinc-700 rounded p-2.5 text-white focus:outline-none focus:border-amber-500 text-center" placeholder="••••••">
+                    <input type="password" id="secret-code" class="w-full bg-zinc-950 border border-zinc-700 rounded p-2.5 text-center text-white focus:border-amber-500 focus:outline-none" placeholder="••••••">
                 </div>
                 <div>
-                    <label class="block text-xs text-zinc-400 mb-1">Hedef Manhwa Sitesi URL (Örn: https://manhwatop.com)</label>
-                    <input type="text" id="target-site" class="w-full bg-zinc-950 border border-zinc-700 rounded p-2.5 text-white focus:outline-none focus:border-amber-500" value="https://manhwatop.com">
+                    <label class="block text-xs text-zinc-400 mb-1">Kaynak Site URL</label>
+                    <input type="text" id="target-site" class="w-full bg-zinc-950 border border-zinc-700 rounded p-2.5 text-white focus:border-amber-500 focus:outline-none" value="https://manhwatop.com">
                 </div>
-                <button onclick="verifyAndConnect()" class="w-full bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold p-3 rounded transition mt-2">Sisteme Bağlan</button>
-                <p id="auth-error" class="text-red-500 text-sm text-center hidden">Hatalı gizli kod!</p>
+                <button onclick="verifyAndConnect()" class="w-full bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold p-3 rounded transition">Sistemi Başlat</button>
+                <p id="auth-error" class="text-red-500 text-sm text-center hidden">Hatalı kod girdiniz!</p>
             </div>
         </div>
     </div>
 
-    <!-- MAIN UYGULAMA (Giriş yapıldıktan sonra açılır) -->
     <div id="app-content" class="hidden">
         <nav class="bg-zinc-900 p-4 flex justify-between items-center border-b border-zinc-800 sticky top-0 z-40 shadow-md">
-            <h1 class="text-xl font-bold text-amber-500 cursor-pointer" onclick="loadLatest()">TEMİZ OKUYUCU</h1>
-            <button onclick="lockSystem()" class="text-xs bg-zinc-800 px-3 py-1.5 rounded text-zinc-400 hover:text-white">Sistemi Kilitle</button>
+            <h1 class="text-xl font-bold text-amber-500 cursor-pointer tracking-wide" onclick="showSection('list')">TEMİZ MANHWA</h1>
+            <button onclick="lockSystem()" class="text-xs bg-zinc-800 px-3 py-1.5 rounded text-zinc-400 hover:text-white">Çıkış Yap</button>
         </nav>
 
         <main class="container mx-auto p-4 min-h-screen">
-            <!-- Manhwa Listesi -->
-            <div id="manga-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6"></div>
+            
+            <div id="manga-list-section" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6"></div>
 
-            <!-- Okuma Alanı -->
-            <div id="reader-area" class="hidden max-w-2xl mx-auto">
-                <div class="flex justify-between items-center my-4">
-                    <button onclick="closeReader()" class="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded transition">← Listeye Dön</button>
-                    <span id="chapter-title" class="font-semibold text-amber-500 text-sm truncate max-w-[200px]"></span>
+            <div id="manga-detail-section" class="hidden max-w-4xl mx-auto bg-zinc-900/50 p-6 rounded-xl border border-zinc-800">
+                <button onclick="showSection('list')" class="bg-zinc-800 px-4 py-2 rounded text-sm mb-6 hover:bg-zinc-700">← Geri Dön</button>
+                <div class="flex flex-col md:flex-row gap-6 items-center md:items-start">
+                    <img id="detail-cover" class="w-48 h-68 object-cover rounded-lg shadow-lg border border-zinc-700">
+                    <div class="flex-1 w-full">
+                        <h2 id="detail-title" class="text-2xl font-bold text-amber-500 mb-4 text-center md:text-left"></h2>
+                        <h3 class="text-md font-semibold text-zinc-400 mb-2 border-b border-zinc-800 pb-2">Bölümler</h3>
+                        <div id="detail-chapters" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-96 overflow-y-auto pr-2">
+                            </div>
+                    </div>
                 </div>
-                <div id="chapter-images" class="flex flex-col gap-1 bg-black p-2 rounded shadow-2xl"></div>
             </div>
+
+            <div id="reader-section" class="hidden max-w-2xl mx-auto">
+                <div class="flex justify-between items-center mb-4 bg-zinc-900 p-3 rounded-lg border border-zinc-800">
+                    <button id="reader-back-btn" class="bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1.5 rounded text-sm">← Bölüm Listesi</button>
+                    <span id="reader-chapter-title" class="font-semibold text-amber-500 text-sm truncate max-w-[200px]"></span>
+                </div>
+                <div id="chapter-images" class="flex flex-col bg-black p-1 rounded-lg shadow-2xl overflow-hidden"></div>
+            </div>
+
         </main>
     </div>
 
     <script>
         const API_URL = `${window.location.origin}/api`;
-        let systemToken = "";
         let currentTargetUrl = "";
+        let selectedMangaSlug = "";
 
         function verifyAndConnect() {
             const code = document.getElementById('secret-code').value;
-            const target = document.getElementById('target-site').value.replace(/\/$/, ""); // Sondaki eğik çizgiyi temizle
+            const target = document.getElementById('target-site').value.replace(/\/$/, "");
 
-            if(code === "123456") { // GİZLİ KODUNUZ BURASI (İstediğin gibi değiştir)
-                systemToken = code;
+            if(code === "123456") { // GİZLİ GİRİŞ KODU
                 currentTargetUrl = target;
-                
                 document.getElementById('auth-panel').classList.add('hidden');
                 document.getElementById('app-content').classList.remove('hidden');
-                document.getElementById('auth-error').classList.add('hidden');
-                
+                showSection('list');
                 loadLatest();
             } else {
                 document.getElementById('auth-error').classList.remove('hidden');
@@ -77,30 +84,36 @@
         }
 
         function lockSystem() {
-            systemToken = "";
             document.getElementById('secret-code').value = "";
             document.getElementById('auth-panel').classList.remove('hidden');
             document.getElementById('app-content').classList.add('hidden');
         }
 
+        // Sayfa katmanları arası geçiş kontrolü
+        function showSection(section) {
+            document.getElementById('manga-list-section').classList.add('hidden');
+            document.getElementById('manga-detail-section').classList.add('hidden');
+            document.getElementById('reader-section').classList.add('hidden');
+
+            if(section === 'list') document.getElementById('manga-list-section').classList.remove('hidden');
+            if(section === 'detail') document.getElementById('manga-detail-section').classList.remove('hidden');
+            if(section === 'reader') document.getElementById('reader-section').classList.remove('hidden');
+        }
+
+        // 1. ANA SAYFAYI YÜKLE
         async function loadLatest() {
-            document.getElementById('manga-list').classList.remove('hidden');
-            document.getElementById('reader-area').classList.add('hidden');
-            
-            const listDiv = document.getElementById('manga-list');
-            listDiv.innerHTML = '<p class="text-center col-span-full text-zinc-400 p-12">Kaynak siteden veriler kazınıyor...</p>';
+            const listDiv = document.getElementById('manga-list-section');
+            listDiv.innerHTML = '<p class="text-center col-span-full text-zinc-400 p-12">Veriler kaynaktan çekiliyor...</p>';
             
             try {
                 const res = await fetch(`${API_URL}/latest?target=${encodeURIComponent(currentTargetUrl)}`);
                 const data = await res.json();
                 
-                if(data.error) throw new Error(data.error);
-
                 listDiv.innerHTML = '';
                 data.forEach(manga => {
                     listDiv.innerHTML += `
-                        <div class="bg-zinc-900 rounded-lg overflow-hidden shadow-lg cursor-pointer hover:scale-105 transition duration-300 border border-zinc-800" onclick="openChapter('${manga.slug}', 'chapter-1')">
-                            <img src="${manga.img}" class="w-full h-72 object-cover" alt="" onerror="this.src='https://placehold.co/300x450/18181b/71717a?text=Resim+Yuklenemedi'">
+                        <div class="bg-zinc-900 rounded-lg overflow-hidden shadow-lg cursor-pointer hover:scale-105 transition duration-300 border border-zinc-800" onclick="openMangaDetail('${manga.slug}')">
+                            <img src="${manga.img}" class="w-full h-72 object-cover" onerror="this.src='https://placehold.co/300x450/18181b/71717a?text=Resim+Yok'">
                             <div class="p-3">
                                 <h3 class="text-sm font-bold text-center line-clamp-2 text-zinc-200">${manga.title}</h3>
                             </div>
@@ -108,22 +121,53 @@
                     `;
                 });
             } catch (e) {
-                listDiv.innerHTML = `
-                    <div class="text-center col-span-full p-8 bg-red-950/30 border border-red-900/50 rounded-xl">
-                        <p class="text-red-400 font-semibold">Bağlantı Başarısız Olma Sebepleri:</p>
-                        <p class="text-xs text-zinc-400 mt-2">1. Site Cloudflare ile tamamen kilitlenmiş olabilir.<br>2. Girdiğiniz URL adresi hatalı veya yapısı farklı olabilir.</p>
-                        <button onclick="lockSystem()" class="mt-4 bg-zinc-800 px-4 py-2 rounded text-sm">Başka Link Dene</button>
-                    </div>`;
+                listDiv.innerHTML = '<p class="text-center col-span-full text-red-500 p-8">Hata: Siteye bağlanılamadı. Kilitlenmiş veya URL hatalı olabilir.</p>';
             }
         }
 
-        async function openChapter(mangaSlug, chapterSlug) {
-            document.getElementById('manga-list').classList.add('hidden');
-            document.getElementById('reader-area').classList.remove('hidden');
+        // 2. DETAY VE BÖLÜM LİSTESİNİ AÇ (YENİ EKLENDİ)
+        async function openMangaDetail(slug) {
+            selectedMangaSlug = slug;
+            showSection('detail');
             
-            document.getElementById('chapter-title').innerText = `${mangaSlug}`;
+            document.getElementById('detail-title').innerText = "Yükleniyor...";
+            document.getElementById('detail-chapters').innerHTML = "";
+            
+            try {
+                const res = await fetch(`${API_URL}/manga/${slug}?target=${encodeURIComponent(currentTargetUrl)}`);
+                const data = await res.json();
+
+                document.getElementById('detail-title').innerText = data.title;
+                document.getElementById('detail-cover').src = data.img || 'https://placehold.co/300x450/18181b/71717a?text=Resim+Yok';
+                
+                const chaptersDiv = document.getElementById('detail-chapters');
+                if(data.chapters.length === 0) {
+                    chaptersDiv.innerHTML = '<p class="text-zinc-500 col-span-full">Bölüm listesi boş veya çekilemedi.</p>';
+                    return;
+                }
+
+                data.chapters.forEach(ch => {
+                    chaptersDiv.innerHTML += `
+                        <button onclick="openChapter('${slug}', '${ch.slug}')" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm p-2.5 rounded text-left transition truncate">
+                            ${ch.title}
+                        </button>
+                    `;
+                });
+            } catch (e) {
+                document.getElementById('detail-title').innerText = "Hata Oluştu";
+            }
+        }
+
+        // 3. BÖLÜMÜ REKLAMSIZ OKU
+        async function openChapter(mangaSlug, chapterSlug) {
+            showSection('reader');
+            document.getElementById('reader-chapter-title').innerText = `${chapterSlug.toUpperCase()}`;
+            
+            // Geri butonu bizi o manga detayına geri götürmeli
+            document.getElementById('reader-back-btn').onclick = () => openMangaDetail(mangaSlug);
+
             const imgContainer = document.getElementById('chapter-images');
-            imgContainer.innerHTML = '<p class="text-center p-8 text-zinc-400">Görseller reklamlardan arındırılıyor...</p>';
+            imgContainer.innerHTML = '<p class="text-center p-12 text-zinc-400">Sayfalar reklamlardan temizleniyor...</p>';
 
             try {
                 const res = await fetch(`${API_URL}/chapter/${mangaSlug}/${chapterSlug}?target=${encodeURIComponent(currentTargetUrl)}`);
@@ -131,7 +175,7 @@
                 
                 imgContainer.innerHTML = '';
                 if(!data.images || data.images.length === 0) {
-                    imgContainer.innerHTML = '<p class="text-center p-8 text-amber-500">Bu bölümün resimleri çekilemedi (Kaynak site korumalı veya bölüm slug yapısı farklı).</p>';
+                    imgContainer.innerHTML = '<p class="text-center p-8 text-amber-500">Resimler çekilemedi. Site koruması aktif olabilir.</p>';
                     return;
                 }
                 data.images.forEach(imgUrl => {
@@ -139,12 +183,8 @@
                 });
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             } catch (e) {
-                imgContainer.innerHTML = '<p class="text-center text-red-500 p-4">Bölüm yüklenirken bir hata oluştu.</p>';
+                imgContainer.innerHTML = '<p class="text-center text-red-500 p-4">Bölüm yüklenemedi.</p>';
             }
-        }
-
-        function closeReader() {
-            loadLatest();
         }
     </script>
 </body>
