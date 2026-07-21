@@ -19,13 +19,13 @@ app.use(session({
 
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
-const getHeaders = (targetUrl, accept = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8') => {
+const getHeaders = (targetUrl, accept = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8', refererOverride) => {
     const urlObj = new URL(targetUrl);
     return {
         'User-Agent': CHROME_UA,
         'Accept': accept,
         'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Referer': urlObj.origin + '/',
+        'Referer': refererOverride || urlObj.origin + '/',
         'Host': urlObj.host,
         'Connection': 'keep-alive',
         'Cache-Control': 'no-cache',
@@ -236,95 +236,92 @@ app.get('/api/image', async (req, res) => {
     }
 });
 
+// Fetch an image with retry and proper referer
+async function fetchImageWithRetry(imgUrl, referer, retries = 2) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const headers = getHeaders(imgUrl, 'image/avif,image/webp,image/apng,image/png,image/jpeg,image/gif,*/*;q=0.9', referer);
+            const userAgents = [
+                CHROME_UA,
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15'
+            ];
+            if (attempt > 0) {
+                headers['User-Agent'] = userAgents[attempt % userAgents.length];
+                headers['Referer'] = attempt === 1 ? referer : referer + 'page/' + Math.floor(Math.random() * 100);
+            }
+            const imgRes = await tunnelAxios.get(imgUrl, {
+                headers,
+                responseType: 'arraybuffer',
+                timeout: 15000 + attempt * 5000
+            });
+            if (imgRes.status === 200) return imgRes;
+        } catch (e) {
+            if (attempt === retries) throw e;
+        }
+    }
+}
+
+async function appendChapterToArchive(archive, chUrl, chTitle, baseUrl, chapterIndex) {
+    const resolvedUrl = chUrl.startsWith('http') ? chUrl : new URL(chUrl, baseUrl).href;
+    const pageRes = await tunnelAxios.get(resolvedUrl, {
+        headers: getHeaders(resolvedUrl),
+        responseType: 'text',
+        timeout: 15000
+    });
+    const images = extractImagesFromHtml(pageRes.data);
+    for (let j = 0; j < images.length; j++) {
+        try {
+            const imgUrl = images[j].startsWith('http') ? images[j] : new URL(images[j], resolvedUrl).href;
+            const imgRes = await fetchImageWithRetry(imgUrl, resolvedUrl);
+            const ext = imgUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
+            const chName = (chTitle || `chapter-${chapterIndex + 1}`).replace(/[^\w]/g, '_');
+            archive.append(Buffer.from(imgRes.data), { name: `${chName}/page-${String(j + 1).padStart(3, '0')}.${ext}` });
+        } catch (e) { /* skip failed image */ }
+    }
+    return images.length;
+}
+
 // Download chapter as CBZ
 app.get('/api/download', async (req, res) => {
     const { url, type } = req.query;
     if (!url) return res.status(400).json({ error: 'URL parametresi zorunludur.' });
 
     try {
-        if (type === 'manga') {
-            // Download all chapters of a manga
-            const result = await fetchChapters(url);
-            const chapters = result.chapters || [];
-            if (chapters.length === 0) return res.status(404).json({ error: 'Bölüm bulunamadı.' });
+        const chapters = type === 'manga'
+            ? (await fetchChapters(url)).chapters || []
+            : [{ href: url, title: 'Bölüm' }];
 
-            const mangaName = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'manga').replace(/[^\w\-]/g, '_');
-            res.setHeader('Content-Type', 'application/zip');
-            res.setHeader('Content-Disposition', `attachment; filename="${mangaName}.cbz"`);
-
-            const archive = archiver('zip', { gzip: false, highWaterMark: 1024 * 1024 });
-            archive.on('error', err => {
-                console.error(`[CBZ Hatası] ${err.message}`);
-                if (!res.headersSent) res.status(500).json({ error: 'CBZ oluşturulamadı.' });
-            });
-            archive.pipe(res);
-
-            for (let i = 0; i < chapters.length; i++) {
-                const ch = chapters[i];
-                try {
-                    const chUrl = ch.href.startsWith('http') ? ch.href : new URL(ch.href, url).href;
-                    const pageRes = await tunnelAxios.get(chUrl, {
-                        headers: getHeaders(chUrl),
-                        responseType: 'text',
-                        timeout: 15000
-                    });
-                    const images = extractImagesFromHtml(pageRes.data);
-                    for (let j = 0; j < images.length; j++) {
-                        try {
-                            const imgUrl = images[j].startsWith('http') ? images[j] : new URL(images[j], chUrl).href;
-                            const imgRes = await tunnelAxios.get(imgUrl, {
-                                headers: getHeaders(imgUrl, 'image/*'),
-                                responseType: 'arraybuffer',
-                                timeout: 15000
-                            });
-                            const ext = imgUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
-                            const chName = (ch.title || `chapter-${i + 1}`).replace(/[^\w]/g, '_');
-                            archive.append(Buffer.from(imgRes.data), { name: `${chName}/page-${String(j + 1).padStart(3, '0')}.${ext}` });
-                        } catch (e) { /* skip failed image */ }
-                    }
-                    console.log(`[CBZ] ${ch.title}: ${images.length} resim işlendi`);
-                } catch (e) {
-                    console.error(`[CBZ Bölüm Hatası] ${ch.title}: ${e.message}`);
-                }
-            }
-            archive.finalize();
-        } else {
-            // Download single chapter
-            const pageRes = await tunnelAxios.get(url, {
-                headers: getHeaders(url),
-                responseType: 'text',
-                timeout: 20000
-            });
-            const images = extractImagesFromHtml(pageRes.data);
-            if (images.length === 0) return res.status(404).json({ error: 'Resim bulunamadı.' });
-
-            const chapterName = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'chapter').replace(/[^\w\-]/g, '_');
-            res.setHeader('Content-Type', 'application/zip');
-            res.setHeader('Content-Disposition', `attachment; filename="${chapterName}.cbz"`);
-
-            const archive = archiver('zip', { gzip: false, highWaterMark: 1024 * 1024 });
-            archive.on('error', err => {
-                console.error(`[CBZ Hatası] ${err.message}`);
-                if (!res.headersSent) res.status(500).json({ error: 'CBZ oluşturulamadı.' });
-            });
-            archive.pipe(res);
-
-            console.log(`[CBZ] ${chapterName}: ${images.length} resim bulundu`);
-
-            for (let i = 0; i < images.length; i++) {
-                try {
-                    const imgUrl = images[i].startsWith('http') ? images[i] : new URL(images[i], url).href;
-                    const imgRes = await tunnelAxios.get(imgUrl, {
-                        headers: getHeaders(imgUrl, 'image/*'),
-                        responseType: 'arraybuffer',
-                        timeout: 15000
-                    });
-                    const ext = imgUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
-                    archive.append(Buffer.from(imgRes.data), { name: `page-${String(i + 1).padStart(3, '0')}.${ext}` });
-                } catch (e) { /* skip */ }
-            }
-            archive.finalize();
+        if (chapters.length === 0) {
+            const msg = type === 'manga' ? 'Bölüm bulunamadı.' : 'Resim bulunamadı.';
+            return res.status(404).json({ error: msg });
         }
+
+        const nameBase = type === 'manga'
+            ? decodeURIComponent(url.split('/').filter(Boolean).pop() || 'manga')
+            : decodeURIComponent(url.split('/').filter(Boolean).pop() || 'chapter');
+        const fileName = nameBase.replace(/[^\w\-]/g, '_');
+
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}.cbz"`);
+
+        const archive = archiver('zip', { gzip: false, highWaterMark: 1024 * 1024 });
+        archive.on('error', err => {
+            console.error(`[CBZ Hatası] ${err.message}`);
+            if (!res.headersSent) res.status(500).json({ error: 'CBZ oluşturulamadı.' });
+        });
+        archive.pipe(res);
+
+        for (let i = 0; i < chapters.length; i++) {
+            const ch = chapters[i];
+            try {
+                const count = await appendChapterToArchive(archive, ch.href, ch.title, url, i);
+                console.log(`[CBZ] ${ch.title}: ${count} resim`);
+            } catch (e) {
+                console.error(`[CBZ Bölüm Hatası] ${ch.title}: ${e.message}`);
+            }
+        }
+        archive.finalize();
     } catch (error) {
         console.error(`[İndirme Hatası] ${url} -> ${error.message}`);
         if (!res.headersSent) {

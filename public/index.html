@@ -406,15 +406,24 @@
         let _currentChapterUrl = '';
         let _currentMangaUrl = '';
 
+        function triggerDownload(url) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => document.body.removeChild(a), 1000);
+        }
+
         function downloadCurrentChapter() {
             if (_currentChapterUrl) {
-                window.open(`/api/download?url=${encodeURIComponent(_currentChapterUrl)}`);
+                triggerDownload(`/api/download?url=${encodeURIComponent(_currentChapterUrl)}`);
             }
         }
 
         function downloadFullManga() {
             if (_currentMangaUrl) {
-                window.open(`/api/download?url=${encodeURIComponent(_currentMangaUrl)}&type=manga`);
+                triggerDownload(`/api/download?url=${encodeURIComponent(_currentMangaUrl)}&type=manga`);
             }
         }
 
