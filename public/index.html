@@ -352,6 +352,34 @@
                 });
             }
             
+            // Fallback 1: check for read-first/read-last buttons
+            if (chapterLinks.length === 0) {
+                const readBtns = doc.querySelectorAll('#btn-read-first, #btn-read-last, .c-btn[href*="/manga/"]');
+                readBtns.forEach(a => {
+                    const href = a.href || '';
+                    const text = a.innerText || a.title || 'Bölüm';
+                    if (href && !chapterLinks.some(l => l.href === href)) {
+                        chapterLinks.push(a);
+                    }
+                });
+            }
+
+            // Fallback 2: fetch chapters from server-side API
+            if (chapterLinks.length === 0) {
+                try {
+                    const apiRes = await fetch(`/api/chapters?url=${encodeURIComponent(url)}`);
+                    const apiData = await apiRes.json();
+                    if (apiData.chapters && apiData.chapters.length > 0) {
+                        apiData.chapters.forEach(ch => {
+                            const a = doc.createElement('a');
+                            a.href = ch.href;
+                            a.innerText = ch.title;
+                            chapterLinks.push(a);
+                        });
+                    }
+                } catch (e) {}
+            }
+            
             if (chapterLinks.length === 0) {
                 chaptersDiv.innerHTML = '<p class="text-zinc-500 p-4">Bölüm bulunamadı.</p>';
             } else {
