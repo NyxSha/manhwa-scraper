@@ -87,7 +87,7 @@
         function doSearch() {
             const query = document.getElementById('nav-search').value.trim();
             if (!query) return;
-            const site = document.getElementById('target-site').value.replace(/\/+$/, '');
+            const site = fixUrl(document.getElementById('target-site').value).replace(/\/+$/, '');
             navigateTo(site + '/?s=' + query);
         }
 
@@ -153,7 +153,14 @@
             return [];
         }
 
+        function fixUrl(u) {
+            u = u.trim();
+            if (u && !u.match(/^https?:\/\//i)) u = 'https://' + u;
+            return u;
+        }
+
         function navigateTo(url) {
+            url = fixUrl(url);
             document.getElementById('nav-url').value = url;
             loadLatest(url);
         }
@@ -162,12 +169,12 @@
             let url;
             if (encodedPageUrl) {
                 try {
-                    url = safeDecode(encodedPageUrl);
+                    url = fixUrl(safeDecode(encodedPageUrl));
                 } catch(e) {
-                    url = encodedPageUrl;
+                    url = fixUrl(encodedPageUrl);
                 }
             } else {
-                url = document.getElementById('target-site').value;
+                url = fixUrl(document.getElementById('target-site').value);
             }
             currentPageUrl = url;
             currentSiteUrl = new URL(url).origin;
@@ -256,10 +263,10 @@
             const paginationDiv = document.createElement('div');
             paginationDiv.className = 'pagination-controls col-span-full flex justify-center gap-4 mt-6';
             if (nextUrl) {
-                paginationDiv.innerHTML += `<button onclick="loadLatest('${safeEncode(nextUrl)}')" class="bg-amber-600 hover:bg-amber-500 text-zinc-950 px-6 py-2 rounded font-bold text-sm">Sonraki Sayfa →</button>`;
+                paginationDiv.innerHTML += `<button onclick="navigateTo('${safeEncode(nextUrl)}')" class="bg-amber-600 hover:bg-amber-500 text-zinc-950 px-6 py-2 rounded font-bold text-sm">Sonraki Sayfa →</button>`;
             }
             if (encodedPageUrl) {
-                paginationDiv.innerHTML += `<button onclick="loadLatest()" class="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2 rounded font-bold text-sm">← Ana Sayfa</button>`;
+                paginationDiv.innerHTML += `<button onclick="navigateTo('')" class="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2 rounded font-bold text-sm">← Ana Sayfa</button>`;
             }
             if (paginationDiv.children.length > 0) {
                 listDiv.parentElement.appendChild(paginationDiv);
@@ -269,18 +276,29 @@
             const existingNav = listDiv.parentElement.querySelector('.site-nav-links');
             if (existingNav) existingNav.remove();
             const navLinks = [];
-            doc.querySelectorAll('.navbar-nav a, .main-nav a, .menu-menu a, nav a, .navigation a').forEach(a => {
-                const href = a.href || '';
+            const seenUrls = new Set();
+            const siteOrigin = new URL(currentSiteUrl).origin;
+            doc.querySelectorAll('.navbar-nav a, .main-nav a, .menu-menu a, nav a, .navigation a, .menu a, .nav a, [class*="menu"] a, [class*="nav"] a').forEach(a => {
+                let href = a.href || '';
                 const text = (a.innerText || '').trim();
-                if (href && text && text.length < 30 && href.startsWith(currentSiteUrl) && !href.includes('#') && !navLinks.some(n => n.href === href)) {
-                    navLinks.push({ href, text });
-                }
+                if (!href || !text || text.length > 35) return;
+                // Skip javascript links, anchors, external links
+                if (href.startsWith('javascript:') || href === '#' || href.startsWith('#')) return;
+                // Resolve relative URLs
+                try { href = new URL(href, currentSiteUrl).href; } catch(e) { return; }
+                // Filter by same-origin
+                if (!href.startsWith(siteOrigin)) return;
+                // Clean cache busters
+                href = href.replace(/[?&](swcfpc|d|ref)=\d+/g, '').replace(/\?$/, '');
+                if (seenUrls.has(href)) return;
+                seenUrls.add(href);
+                navLinks.push({ href, text });
             });
             if (navLinks.length > 0) {
                 const navDiv = document.createElement('div');
                 navDiv.className = 'site-nav-links col-span-full flex flex-wrap gap-2 mt-4 p-3 bg-zinc-900/50 rounded-lg border border-zinc-800';
-                navLinks.slice(0, 20).forEach(n => {
-                    navDiv.innerHTML += `<button onclick="loadLatest('${safeEncode(n.href)}')" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1 rounded text-xs">${n.text}</button>`;
+                navLinks.slice(0, 25).forEach(n => {
+                    navDiv.innerHTML += `<button onclick="navigateTo('${safeEncode(n.href)}')" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1 rounded text-xs">${n.text}</button>`;
                 });
                 listDiv.parentElement.appendChild(navDiv);
             }
