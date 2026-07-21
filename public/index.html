@@ -474,16 +474,23 @@
             document.body.appendChild(statusDiv);
 
             const allImages = [];
+            let failedChapters = 0;
             for (let i = 0; i < total; i++) {
                 try {
-                    statusDiv.innerHTML = `<p class="text-amber-500 font-bold">İndirme hazırlanıyor...</p><p class="text-zinc-400 text-sm mt-2">${i + 1}/${total} bölüm taranıyor</p>`;
+                    statusDiv.innerHTML = `<p class="text-amber-500 font-bold">İndirme hazırlanıyor...</p><p class="text-zinc-400 text-sm mt-2">${i + 1}/${total} bölüm taranıyor${failedChapters > 0 ? ` (${failedChapters} hatalı)` : ''}</p>`;
                     const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(chapters[i].href)}`);
                     const html = await res.text();
                     const images = extractChapterImages(html);
+                    if (images.length === 0) {
+                        failedChapters++;
+                        console.warn(`[Bölüm ${i + 1}] ${chapters[i].title}: 0 resim bulundu`);
+                        continue;
+                    }
                     const baseUrl = chapters[i].href;
                     images.forEach(url => allImages.push({ url, referer: baseUrl }));
                 } catch (e) {
-                    console.error(`[Bölüm ${i + 1}] Hata: ${e.message}`);
+                    failedChapters++;
+                    console.error(`[Bölüm ${i + 1}] ${chapters[i].title}: ${e.message}`);
                 }
             }
 

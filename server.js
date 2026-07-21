@@ -258,7 +258,12 @@ async function fetchImageWithRetry(imgUrl, referer, retries = 2) {
                 responseType: 'arraybuffer',
                 timeout: 15000 + attempt * 5000
             });
-            if (imgRes.status === 200) return Buffer.from(imgRes.data);
+            if (imgRes.status === 200) {
+                const ct = (imgRes.headers['content-type'] || '').toLowerCase();
+                if (ct.startsWith('image/') || ct.startsWith('application/octet-stream') || !ct) {
+                    return Buffer.from(imgRes.data);
+                }
+            }
         } catch (e) {
             if (attempt === retries) throw e;
         }
