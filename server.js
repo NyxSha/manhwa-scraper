@@ -3,6 +3,7 @@ const axios = require('axios');
 const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
+const archiver = require('archiver');
 
 const app = express();
 app.use(cors());
@@ -237,6 +238,98 @@ app.get('/api/image', async (req, res) => {
         res.status(502).json({ error: 'Resim yüklenemedi.' });
     }
 });
+
+// Download chapter as CBZ
+app.get('/api/download', async (req, res) => {
+    const { url, type } = req.query;
+    if (!url) return res.status(400).json({ error: 'URL parametresi zorunludur.' });
+
+    try {
+        if (type === 'manga') {
+            // Download all chapters of a manga
+            const chaptersRes = await tunnelAxios.get(`http://localhost:${PORT}/api/chapters`, {
+                params: { url },
+                responseType: 'json'
+            });
+            const chapters = chaptersRes.data.chapters || [];
+            if (chapters.length === 0) return res.status(404).json({ error: 'Bölüm bulunamadı.' });
+
+            const mangaName = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'manga');
+            res.setHeader('Content-Type', 'application/zip');
+            res.setHeader('Content-Disposition', `attachment; filename="${mangaName}.cbz"`);
+
+            const archive = archiver('zip', { gzip: false });
+            archive.pipe(res);
+
+            for (let i = 0; i < chapters.length; i++) {
+                const ch = chapters[i];
+                try {
+                    const pageRes = await tunnelAxios.get(ch.href, {
+                        headers: getHeaders(ch.href),
+                        responseType: 'text',
+                        timeout: 15000
+                    });
+                    const images = extractImagesFromHtml(pageRes.data);
+                    for (let j = 0; j < images.length; j++) {
+                        try {
+                            const imgRes = await tunnelAxios.get(images[j], {
+                                headers: getHeaders(images[j], 'image/*'),
+                                responseType: 'arraybuffer',
+                                timeout: 15000
+                            });
+                            const ext = images[j].match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
+                            const chName = (ch.title || `chapter-${i + 1}`).replace(/[^\w]/g, '_');
+                            archive.append(Buffer.from(imgRes.data), { name: `${chName}/page-${j + 1}.${ext}` });
+                        } catch (e) { /* skip failed image */ }
+                    }
+                } catch (e) { /* skip failed chapter */ }
+            }
+            archive.finalize();
+        } else {
+            // Download single chapter
+            const pageRes = await tunnelAxios.get(url, {
+                headers: getHeaders(url),
+                responseType: 'text',
+                timeout: 20000
+            });
+            const images = extractImagesFromHtml(pageRes.data);
+            if (images.length === 0) return res.status(404).json({ error: 'Resim bulunamadı.' });
+
+            const chapterName = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'chapter');
+            res.setHeader('Content-Type', 'application/zip');
+            res.setHeader('Content-Disposition', `attachment; filename="${chapterName}.cbz"`);
+
+            const archive = archiver('zip', { gzip: false });
+            archive.pipe(res);
+
+            for (let i = 0; i < images.length; i++) {
+                try {
+                    const imgRes = await tunnelAxios.get(images[i], {
+                        headers: getHeaders(images[i], 'image/*'),
+                        responseType: 'arraybuffer',
+                        timeout: 15000
+                    });
+                    const ext = images[i].match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
+                    archive.append(Buffer.from(imgRes.data), { name: `page-${i + 1}.${ext}` });
+                } catch (e) { /* skip */ }
+            }
+            archive.finalize();
+        }
+    } catch (error) {
+        console.error(`[İndirme Hatası] ${url} -> ${error.message}`);
+        res.status(502).json({ error: 'İndirme başarısız.', detail: error.message });
+    }
+});
+
+function extractImagesFromHtml(html) {
+    const imgRegex = /https?:\/\/[^\s"'<>()]+\.(?:jpg|jpeg|png|webp|avif|gif)(?:\?[^\s"'<>()]*)?/gi;
+    const matches = html.match(imgRegex);
+    if (!matches) return [];
+    return [...new Set(matches)].filter(u => {
+        const low = u.toLowerCase();
+        return !low.includes('logo') && !low.includes('avatar') && !low.includes('icon') && !low.includes('banner') && !low.includes('sponsor') && !low.includes('thumb') && !low.includes('button');
+    });
+}
 
 // Serve login.html without auth
 app.get('/login.html', (req, res) => {

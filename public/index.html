@@ -33,6 +33,7 @@
                     <img id="detail-cover" class="w-48 h-68 object-cover rounded-lg border border-zinc-700">
                     <div class="flex-1">
                         <h2 id="detail-title" class="text-2xl font-bold text-amber-500 mb-4"></h2>
+                        <button id="detail-download-btn" class="hidden bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded text-sm mb-3 w-full" onclick="downloadFullManga()">⬇ Tümünü CBZ İndir</button>
                         <div id="detail-chapters" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-96 overflow-y-auto"></div>
                     </div>
                 </div>
@@ -42,6 +43,7 @@
                 <div class="flex justify-between items-center mb-4 bg-zinc-900 p-3 rounded-lg border border-zinc-800">
                     <button id="reader-back-btn" class="bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1.5 rounded text-sm">← Geri</button>
                     <span id="reader-chapter-title" class="text-amber-500 text-sm truncate"></span>
+                    <button id="reader-download-btn" class="hidden bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded text-sm" onclick="downloadCurrentChapter()">⬇ CBZ</button>
                 </div>
                 <div id="chapter-images" class="flex flex-col bg-black p-1"></div>
             </div>
@@ -306,7 +308,9 @@
 
         async function openMangaDetail(encodedUrl) {
             showSection('detail');
-            const url = safeDecode(encodedUrl);
+            _currentMangaUrl = safeDecode(encodedUrl);
+            document.getElementById('detail-download-btn').classList.remove('hidden');
+            const url = _currentMangaUrl;
             const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(url)}`);
             const html = await res.text();
             const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -399,10 +403,27 @@
             return `${window.location.origin}/api/image?url=${encodeURIComponent(url)}`;
         }
 
+        let _currentChapterUrl = '';
+        let _currentMangaUrl = '';
+
+        function downloadCurrentChapter() {
+            if (_currentChapterUrl) {
+                window.open(`/api/download?url=${encodeURIComponent(_currentChapterUrl)}`);
+            }
+        }
+
+        function downloadFullManga() {
+            if (_currentMangaUrl) {
+                window.open(`/api/download?url=${encodeURIComponent(_currentMangaUrl)}&type=manga`);
+            }
+        }
+
         async function openChapter(mUrl, cUrl, title) {
             showSection('reader');
+            _currentChapterUrl = safeDecode(cUrl);
             document.getElementById('reader-chapter-title').innerText = safeDecode(title);
             document.getElementById('reader-back-btn').onclick = () => openMangaDetail(mUrl);
+            document.getElementById('reader-download-btn').classList.remove('hidden');
             const chapterImages = document.getElementById('chapter-images');
             chapterImages.innerHTML = '<p class="text-zinc-500 text-center p-8">Yükleniyor...</p>';
             
