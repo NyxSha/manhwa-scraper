@@ -433,11 +433,12 @@
                 return;
             }
             const name = decodeURIComponent(_currentMangaUrl.split('/').filter(Boolean).pop() || 'manga');
+            const chapters = [..._currentChapters].reverse();
             try {
                 const saveRes = await fetch('/api/save-chapters', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chapters: _currentChapters, name, baseUrl: _currentMangaUrl })
+                    body: JSON.stringify({ chapters, name, baseUrl: _currentMangaUrl })
                 });
                 if (!saveRes.ok) {
                     const err = await saveRes.json();

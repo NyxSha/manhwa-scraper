@@ -298,7 +298,7 @@ async function buildCbz(chapters, baseUrl, fileName) {
         const images = await fetchChapterImages(ch.href, baseUrl);
         const chName = (ch.title || `chapter-${i + 1}`).replace(/[^\w]/g, '_');
         allChapters.push({ chName, images, title: ch.title });
-        console.log(`[CBZ] ${ch.title || 'Bölüm ' + (i + 1)}: ${images.length}/${images.length} resim`);
+        console.log(`[CBZ] ${ch.title || 'Bölüm ' + (i + 1)}: ${images.length} resim`);
     }
 
     const totalImages = allChapters.reduce((s, c) => s + c.images.length, 0);
@@ -312,9 +312,11 @@ async function buildCbz(chapters, baseUrl, fileName) {
         archive.on('error', reject);
     });
 
+    let pageNum = 1;
     for (const ch of allChapters) {
         for (const img of ch.images) {
-            archive.append(img.data, { name: `${ch.chName}/page-${String(img.idx + 1).padStart(3, '0')}.${img.ext}` });
+            archive.append(img.data, { name: `page-${String(pageNum).padStart(4, '0')}.${img.ext}` });
+            pageNum++;
         }
     }
 
