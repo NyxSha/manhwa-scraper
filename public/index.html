@@ -409,6 +409,8 @@
         let _currentChapterUrl = '';
         let _currentMangaUrl = '';
         let _currentChapters = [];
+        let _currentChapterImages = [];
+        let _currentChapterReferer = '';
 
         function triggerDownload(url) {
             const a = document.createElement('a');
@@ -420,11 +422,41 @@
         }
 
         function downloadCurrentChapter() {
-            if (_currentChapterUrl) {
-                const manga = encodeURIComponent(decodeURIComponent(_currentMangaUrl.split('/').filter(Boolean).pop() || ''));
-                const title = encodeURIComponent(document.getElementById('reader-chapter-title').innerText || '');
-                triggerDownload(`/api/download?url=${encodeURIComponent(_currentChapterUrl)}&manga=${manga}&title=${title}`);
+            if (_currentChapterImages.length === 0) {
+                alert('Resim listesi bulunamadı. Önce bölümü açın.');
+                return;
             }
+            const manga = decodeURIComponent(_currentMangaUrl.split('/').filter(Boolean).pop() || '');
+            const title = document.getElementById('reader-chapter-title').innerText || 'Bölüm';
+            const filename = [manga, title].filter(Boolean).join(' - ').replace(/\s+/g, ' ').trim() || 'chapter';
+
+            const images = _currentChapterImages.map(url => ({ url, referer: _currentChapterReferer }));
+            const body = JSON.stringify({ images, filename });
+
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            document.body.appendChild(a);
+
+            fetch('/api/download-images', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body
+            })
+            .then(res => {
+                if (!res.ok) return res.json().then(e => { throw new Error(e.error || 'Hata'); });
+                return res.blob();
+            })
+            .then(blob => {
+                a.href = URL.createObjectURL(blob);
+                a.download = filename + '.cbz';
+                a.click();
+                URL.revokeObjectURL(a.href);
+                document.body.removeChild(a);
+            })
+            .catch(err => {
+                document.body.removeChild(a);
+                alert('İndirme hatası: ' + err.message);
+            });
         }
 
         async function downloadFullManga() {
@@ -434,40 +466,82 @@
             }
             const name = decodeURIComponent(_currentMangaUrl.split('/').filter(Boolean).pop() || 'manga');
             const chapters = [..._currentChapters].reverse();
+            const total = chapters.length;
+
+            const statusDiv = document.createElement('div');
+            statusDiv.className = 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-zinc-900 p-6 rounded-xl border border-zinc-700 z-50 text-center';
+            statusDiv.innerHTML = `<p class="text-amber-500 font-bold">İndirme hazırlanıyor...</p><p class="text-zinc-400 text-sm mt-2">0/${total} bölüm taranıyor</p>`;
+            document.body.appendChild(statusDiv);
+
+            const allImages = [];
+            for (let i = 0; i < total; i++) {
+                try {
+                    statusDiv.innerHTML = `<p class="text-amber-500 font-bold">İndirme hazırlanıyor...</p><p class="text-zinc-400 text-sm mt-2">${i + 1}/${total} bölüm taranıyor</p>`;
+                    const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(chapters[i].href)}`);
+                    const html = await res.text();
+                    const images = extractChapterImages(html);
+                    const baseUrl = chapters[i].href;
+                    images.forEach(url => allImages.push({ url, referer: baseUrl }));
+                } catch (e) {
+                    console.error(`[Bölüm ${i + 1}] Hata: ${e.message}`);
+                }
+            }
+
+            document.body.removeChild(statusDiv);
+
+            if (allImages.length === 0) {
+                alert('Hiçbir resim bulunamadı.');
+                return;
+            }
+
+            const filename = (name || 'manga').replace(/[^\w\- ]/g, '').trim() + ' - All Chapters';
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            document.body.appendChild(a);
+
             try {
-                const saveRes = await fetch('/api/save-chapters', {
+                const saveRes = await fetch('/api/download-images', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chapters, name, baseUrl: _currentMangaUrl })
+                    body: JSON.stringify({ images: allImages, filename })
                 });
                 if (!saveRes.ok) {
                     const err = await saveRes.json();
                     alert('İndirme hatası: ' + (err.error || 'Bilinmeyen hata'));
+                    document.body.removeChild(a);
                     return;
                 }
-                triggerDownload('/api/download-all');
+                const blob = await saveRes.blob();
+                a.href = URL.createObjectURL(blob);
+                a.download = filename + '.cbz';
+                a.click();
+                URL.revokeObjectURL(a.href);
+                document.body.removeChild(a);
             } catch (err) {
+                document.body.removeChild(a);
                 alert('İndirme başarısız: ' + err.message);
             }
         }
 
         async function openChapter(mUrl, cUrl, title) {
             showSection('reader');
-            _currentChapterUrl = safeDecode(cUrl);
+            const decodedUrl = safeDecode(cUrl);
+            _currentChapterUrl = decodedUrl;
+            _currentChapterReferer = mUrl;
             document.getElementById('reader-chapter-title').innerText = safeDecode(title);
             document.getElementById('reader-back-btn').onclick = () => openMangaDetail(mUrl);
             document.getElementById('reader-download-btn').classList.remove('hidden');
             const chapterImages = document.getElementById('chapter-images');
             chapterImages.innerHTML = '<p class="text-zinc-500 text-center p-8">Yükleniyor...</p>';
             
-            const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(safeDecode(cUrl))}`);
+            const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(decodedUrl)}`);
             const html = await res.text();
             
             let images = extractChapterImages(html);
+            _currentChapterImages = images;
             
             chapterImages.innerHTML = '';
             if (images.length > 0) {
-                // Try direct first, fall back to proxy on error
                 images.forEach(src => {
                     const img = document.createElement('img');
                     img.className = 'w-full mb-1';

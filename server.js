@@ -392,6 +392,64 @@ app.get('/api/download-all', async (req, res) => {
     }
 });
 
+// Download specific image URLs (frontend provides already-correct URLs)
+app.post('/api/download-images', async (req, res) => {
+    const { images, filename } = req.body;
+    if (!images || !Array.isArray(images) || images.length === 0) {
+        return res.status(400).json({ error: 'Resim listesi zorunludur.' });
+    }
+
+    try {
+        const name = (filename || 'download').replace(/[^\w\- ]/g, '').trim();
+        console.log(`[İndirme] ${images.length} resim indiriliyor...`);
+
+        const downloaded = [];
+        for (let i = 0; i < images.length; i++) {
+            try {
+                const url = images[i].url || images[i];
+                const referer = images[i].referer || url;
+                const imgRes = await fetchImageWithRetry(url, referer);
+                const ext = url.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
+                downloaded.push({ data: imgRes, ext, idx: i });
+                console.log(`  [Resim ${i + 1}/${images.length}] OK`);
+            } catch (e) {
+                console.log(`  [Resim ${i + 1}/${images.length}] HATA: ${e.message}`);
+            }
+        }
+
+        const archive = new ZipArchive();
+        const chunks = [];
+        archive.on('data', c => chunks.push(c));
+        const done = new Promise((resolve, reject) => {
+            archive.on('end', resolve);
+            archive.on('error', reject);
+        });
+
+        for (const img of downloaded) {
+            archive.append(img.data, { name: `page-${String(img.idx + 1).padStart(4, '0')}.${img.ext}` });
+        }
+
+        if (downloaded.length === 0) {
+            archive.append('Hiçbir resim indirilemedi.', { name: 'HATA.txt' });
+        }
+
+        archive.finalize();
+        await done;
+        const buf = Buffer.concat(chunks);
+        console.log(`[İndirme] Tamam: ${name}.cbz (${(buf.length / 1024 / 1024).toFixed(1)} MB)`);
+
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${name}.cbz"`);
+        res.setHeader('Content-Length', buf.length);
+        res.send(buf);
+    } catch (error) {
+        console.error(`[İndirme Hatası] ${error.message}`);
+        if (!res.headersSent) {
+            res.status(502).json({ error: 'İndirme başarısız.', detail: error.message });
+        }
+    }
+});
+
 function extractImagesFromHtml(html) {
     const urls = new Set();
 
