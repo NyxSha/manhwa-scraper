@@ -286,28 +286,44 @@ async function appendChapterToArchive(archive, chUrl, chTitle, baseUrl, chapterI
 }
 
 async function streamCbzArchive(res, chapters, baseUrl, fileName) {
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}.cbz"`);
+    return new Promise((resolve, reject) => {
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}.cbz"`);
 
-    const archive = archiver('zip', { gzip: false, highWaterMark: 1024 * 1024 });
-    archive.on('error', err => console.error(`[CBZ Hatası] ${err.message}`));
-    archive.pipe(res);
+        const archive = archiver('zip', { gzip: false, highWaterMark: 1024 * 1024 });
+        let archiveErrored = false;
 
-    let totalImages = 0;
-    for (let i = 0; i < chapters.length; i++) {
-        try {
-            const count = await appendChapterToArchive(archive, chapters[i].href, chapters[i].title, baseUrl, i);
-            console.log(`[CBZ] ${chapters[i].title}: ${count} resim`);
-            totalImages += count;
-        } catch (e) {
-            console.error(`[CBZ Bölüm Hatası] ${chapters[i].title}: ${e.message}`);
-        }
-    }
+        archive.on('error', err => {
+            archiveErrored = true;
+            console.error(`[CBZ Akış Hatası] ${err.message}`);
+            reject(err);
+        });
 
-    if (totalImages === 0) {
-        archive.append('Hiçbir resim indirilemedi. Site koruma önlemleri uyguluyor olabilir.', { name: 'HATA.txt' });
-    }
-    archive.finalize();
+        archive.pipe(res);
+
+        (async () => {
+            let totalImages = 0;
+            for (let i = 0; i < chapters.length; i++) {
+                if (archiveErrored) break;
+                try {
+                    const count = await appendChapterToArchive(archive, chapters[i].href, chapters[i].title, baseUrl, i);
+                    console.log(`[CBZ] ${chapters[i].title}: ${count} resim`);
+                    totalImages += count;
+                } catch (e) {
+                    console.error(`[CBZ Bölüm Hatası] ${chapters[i].title}: ${e.message}`);
+                }
+            }
+
+            if (totalImages === 0 && !archiveErrored) {
+                archive.append('Hiçbir resim indirilemedi.', { name: 'HATA.txt' });
+            }
+
+            if (!archiveErrored) {
+                await archive.finalize();
+                resolve();
+            }
+        })();
+    });
 }
 
 // Download single chapter as CBZ (GET - supports streaming immediately)
@@ -326,21 +342,32 @@ app.get('/api/download', async (req, res) => {
     }
 });
 
-// Download multiple chapters (POST - frontend sends chapter list already loaded in UI)
-// Body: { chapters: [{href, title}], name: 'mangaName', baseUrl: '...' }
-app.post('/api/download', async (req, res) => {
+// Save chapter list to session for streaming download (avoids blob memory issues)
+app.post('/api/save-chapters', (req, res) => {
     const { chapters, name, baseUrl } = req.body;
     if (!chapters || !Array.isArray(chapters) || chapters.length === 0) {
         return res.status(400).json({ error: 'Bölüm listesi zorunludur.' });
     }
+    req.session.downloadData = { chapters, name, baseUrl };
+    res.json({ success: true });
+});
+
+// Download multiple chapters from session (GET - streaming, no blob)
+app.get('/api/download-all', async (req, res) => {
+    const data = req.session.downloadData;
+    if (!data || !data.chapters || data.chapters.length === 0) {
+        return res.status(400).json({ error: 'İndirme verisi bulunamadı. Önce bölümleri kaydedin.' });
+    }
 
     try {
-        const fileName = (name || 'manga').replace(/[^\w\-]/g, '_');
-        const urlBase = baseUrl || chapters[0].href;
-        await streamCbzArchive(res, chapters, urlBase, fileName);
+        const fileName = (data.name || 'manga').replace(/[^\w\-]/g, '_');
+        await streamCbzArchive(res, data.chapters, data.baseUrl || data.chapters[0].href, fileName);
+        delete req.session.downloadData;
     } catch (error) {
         console.error(`[Toplu İndirme Hatası] ${error.message}`);
-        if (!res.headersSent) {
+        if (res.headersSent) {
+            res.destroy();
+        } else {
             res.status(502).json({ error: 'İndirme başarısız.', detail: error.message });
         }
     }

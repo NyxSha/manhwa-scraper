@@ -419,46 +419,33 @@
             setTimeout(() => document.body.removeChild(a), 1000);
         }
 
-        async function triggerPostDownload(chapters, name, baseUrl) {
-            try {
-                const res = await fetch('/api/download', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chapters, name, baseUrl }),
-                    credentials: 'same-origin'
-                });
-                if (!res.ok) {
-                    const err = await res.json();
-                    alert('İndirme hatası: ' + (err.error || 'Bilinmeyen hata'));
-                    return;
-                }
-                const disposition = res.headers.get('Content-Disposition') || '';
-                const nameMatch = disposition.match(/filename="?(.+?)"?$/);
-                const filename = nameMatch ? nameMatch[1] : (name || 'download') + '.cbz';
-                const blob = await res.blob();
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = filename;
-                a.click();
-                URL.revokeObjectURL(a.href);
-            } catch (err) {
-                alert('İndirme başarısız: ' + err.message);
-            }
-        }
-
         function downloadCurrentChapter() {
             if (_currentChapterUrl) {
                 triggerDownload(`/api/download?url=${encodeURIComponent(_currentChapterUrl)}`);
             }
         }
 
-        function downloadFullManga() {
+        async function downloadFullManga() {
             if (_currentChapters.length === 0) {
                 alert('Bölüm listesi bulunamadı. Önce manga detayını açın.');
                 return;
             }
             const name = decodeURIComponent(_currentMangaUrl.split('/').filter(Boolean).pop() || 'manga');
-            triggerPostDownload(_currentChapters, name, _currentMangaUrl);
+            try {
+                const saveRes = await fetch('/api/save-chapters', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chapters: _currentChapters, name, baseUrl: _currentMangaUrl })
+                });
+                if (!saveRes.ok) {
+                    const err = await saveRes.json();
+                    alert('İndirme hatası: ' + (err.error || 'Bilinmeyen hata'));
+                    return;
+                }
+                triggerDownload('/api/download-all');
+            } catch (err) {
+                alert('İndirme başarısız: ' + err.message);
+            }
         }
 
         async function openChapter(mUrl, cUrl, title) {
