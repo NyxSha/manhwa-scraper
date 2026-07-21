@@ -16,7 +16,6 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
         * { font-family: 'Inter', sans-serif; }
         body {
-            background: #0a0a0f;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -29,10 +28,16 @@
             content: '';
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: radial-gradient(ellipse at 50% 0%, rgba(168,85,247,0.08) 0%, transparent 60%),
-                        radial-gradient(ellipse at 80% 50%, rgba(236,72,153,0.05) 0%, transparent 50%),
-                        radial-gradient(ellipse at 20% 80%, rgba(168,85,247,0.06) 0%, transparent 50%);
-            pointer-events: none;
+            background: url('/favicon.gif') center/cover no-repeat;
+            filter: blur(3px) brightness(0.35);
+            transform: scale(1.05);
+            z-index: 0;
+        }
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(ellipse at 50% 50%, transparent 0%, rgba(10,10,15,0.6) 100%);
             z-index: 0;
         }
         .login-card {
