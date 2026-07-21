@@ -257,7 +257,7 @@ async function fetchImageWithRetry(imgUrl, referer, retries = 2) {
                 responseType: 'arraybuffer',
                 timeout: 15000 + attempt * 5000
             });
-            if (imgRes.status === 200) return imgRes;
+            if (imgRes.status === 200) return Buffer.from(imgRes.data);
         } catch (e) {
             if (attempt === retries) throw e;
         }
@@ -265,75 +265,81 @@ async function fetchImageWithRetry(imgUrl, referer, retries = 2) {
     throw new Error(`Image fetch failed after ${retries + 1} attempts`);
 }
 
-async function appendChapterToArchive(archive, chUrl, chTitle, baseUrl, chapterIndex) {
+async function fetchChapterImages(chUrl, baseUrl) {
     const resolvedUrl = chUrl.startsWith('http') ? chUrl : new URL(chUrl, baseUrl).href;
     const pageRes = await tunnelAxios.get(resolvedUrl, {
         headers: getHeaders(resolvedUrl),
         responseType: 'text',
         timeout: 15000
     });
-    const images = extractImagesFromHtml(pageRes.data);
-    for (let j = 0; j < images.length; j++) {
+    const urls = extractImagesFromHtml(pageRes.data);
+    const images = [];
+    for (let i = 0; i < urls.length; i++) {
         try {
-            const imgUrl = images[j].startsWith('http') ? images[j] : new URL(images[j], resolvedUrl).href;
-            const imgRes = await fetchImageWithRetry(imgUrl, resolvedUrl);
+            const imgUrl = urls[i].startsWith('http') ? urls[i] : new URL(urls[i], resolvedUrl).href;
+            const data = await fetchImageWithRetry(imgUrl, resolvedUrl);
             const ext = imgUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
-            const chName = (chTitle || `chapter-${chapterIndex + 1}`).replace(/[^\w]/g, '_');
-            archive.append(Buffer.from(imgRes.data), { name: `${chName}/page-${String(j + 1).padStart(3, '0')}.${ext}` });
-        } catch (e) { /* skip failed image */ }
+            images.push({ data, ext, idx: i });
+            console.log(`  [Resim ${i + 1}/${urls.length}] OK`);
+        } catch (e) {
+            console.log(`  [Resim ${i + 1}/${urls.length}] HATA: ${e.message}`);
+        }
     }
-    return images.length;
+    return images;
 }
 
-async function streamCbzArchive(res, chapters, baseUrl, fileName) {
-    return new Promise((resolve, reject) => {
-        res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}.cbz"`);
+async function buildCbz(chapters, baseUrl, fileName) {
+    const allChapters = [];
 
-        const archive = archiver('zip', { gzip: false, highWaterMark: 1024 * 1024 });
-        let archiveErrored = false;
+    for (let i = 0; i < chapters.length; i++) {
+        const ch = chapters[i];
+        console.log(`[CBZ] ${ch.title || 'Bölüm ' + (i + 1)}: sayfa indiriliyor...`);
+        const images = await fetchChapterImages(ch.href, baseUrl);
+        const chName = (ch.title || `chapter-${i + 1}`).replace(/[^\w]/g, '_');
+        allChapters.push({ chName, images, title: ch.title });
+        console.log(`[CBZ] ${ch.title || 'Bölüm ' + (i + 1)}: ${images.length}/${images.length} resim`);
+    }
 
-        archive.on('error', err => {
-            archiveErrored = true;
-            console.error(`[CBZ Akış Hatası] ${err.message}`);
-            reject(err);
-        });
+    const totalImages = allChapters.reduce((s, c) => s + c.images.length, 0);
 
-        archive.pipe(res);
+    const archive = archiver('zip', { gzip: false });
+    const chunks = [];
+    archive.on('data', c => chunks.push(c));
 
-        (async () => {
-            let totalImages = 0;
-            for (let i = 0; i < chapters.length; i++) {
-                if (archiveErrored) break;
-                try {
-                    const count = await appendChapterToArchive(archive, chapters[i].href, chapters[i].title, baseUrl, i);
-                    console.log(`[CBZ] ${chapters[i].title}: ${count} resim`);
-                    totalImages += count;
-                } catch (e) {
-                    console.error(`[CBZ Bölüm Hatası] ${chapters[i].title}: ${e.message}`);
-                }
-            }
-
-            if (totalImages === 0 && !archiveErrored) {
-                archive.append('Hiçbir resim indirilemedi.', { name: 'HATA.txt' });
-            }
-
-            if (!archiveErrored) {
-                await archive.finalize();
-                resolve();
-            }
-        })();
+    const done = new Promise((resolve, reject) => {
+        archive.on('end', resolve);
+        archive.on('error', reject);
     });
+
+    for (const ch of allChapters) {
+        for (const img of ch.images) {
+            archive.append(img.data, { name: `${ch.chName}/page-${String(img.idx + 1).padStart(3, '0')}.${img.ext}` });
+        }
+    }
+
+    if (totalImages === 0) {
+        archive.append('Hiçbir resim indirilemedi. Sunucu loglarını kontrol edin.', { name: 'HATA.txt' });
+    }
+
+    archive.finalize();
+    await done;
+    return Buffer.concat(chunks);
 }
 
-// Download single chapter as CBZ (GET - supports streaming immediately)
+// Download single chapter as CBZ
 app.get('/api/download', async (req, res) => {
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL parametresi zorunludur.' });
 
     try {
+        console.log(`[İndirme] Tek bölüm: ${url}`);
         const fileName = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'chapter').replace(/[^\w\-]/g, '_');
-        await streamCbzArchive(res, [{ href: url, title: 'Bölüm' }], url, fileName);
+        const buf = await buildCbz([{ href: url, title: 'Bölüm' }], url, fileName);
+        console.log(`[İndirme] Tamamlandı: ${fileName}.cbz (${(buf.length / 1024 / 1024).toFixed(1)} MB)`);
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}.cbz"`);
+        res.setHeader('Content-Length', buf.length);
+        res.send(buf);
     } catch (error) {
         console.error(`[İndirme Hatası] ${url} -> ${error.message}`);
         if (!res.headersSent) {
@@ -342,27 +348,33 @@ app.get('/api/download', async (req, res) => {
     }
 });
 
-// Save chapter list to session for streaming download (avoids blob memory issues)
+// Save chapter list to session
 app.post('/api/save-chapters', (req, res) => {
     const { chapters, name, baseUrl } = req.body;
     if (!chapters || !Array.isArray(chapters) || chapters.length === 0) {
         return res.status(400).json({ error: 'Bölüm listesi zorunludur.' });
     }
     req.session.downloadData = { chapters, name, baseUrl };
-    res.json({ success: true });
+    res.json({ success: true, count: chapters.length });
 });
 
-// Download multiple chapters from session (GET - streaming, no blob)
+// Download all chapters (GET - from session)
 app.get('/api/download-all', async (req, res) => {
     const data = req.session.downloadData;
     if (!data || !data.chapters || data.chapters.length === 0) {
-        return res.status(400).json({ error: 'İndirme verisi bulunamadı. Önce bölümleri kaydedin.' });
+        return res.status(400).json({ error: 'İndirme verisi bulunamadı.' });
     }
 
     try {
         const fileName = (data.name || 'manga').replace(/[^\w\-]/g, '_');
-        await streamCbzArchive(res, data.chapters, data.baseUrl || data.chapters[0].href, fileName);
+        console.log(`[İndirme] Toplu: ${fileName}, ${data.chapters.length} bölüm`);
+        const buf = await buildCbz(data.chapters, data.baseUrl || data.chapters[0].href, fileName);
         delete req.session.downloadData;
+        console.log(`[İndirme] Tamamlandı: ${fileName}.cbz (${(buf.length / 1024 / 1024).toFixed(1)} MB)`);
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}.cbz"`);
+        res.setHeader('Content-Length', buf.length);
+        res.send(buf);
     } catch (error) {
         console.error(`[Toplu İndirme Hatası] ${error.message}`);
         if (res.headersSent) {
