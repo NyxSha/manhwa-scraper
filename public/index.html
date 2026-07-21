@@ -57,6 +57,8 @@
         const TUNNEL_URL = `${window.location.origin}/api/tunnel?url=`;
         const safeEncode = (str) => btoa(encodeURIComponent(str));
         const safeDecode = (str) => decodeURIComponent(atob(str));
+        let currentPageUrl = '';
+        let currentMangaList = [];
 
         function verifyAndConnect() {
             if(document.getElementById('secret-code').value === "123456") {
@@ -78,40 +80,242 @@
             document.getElementById('reader-section').classList.toggle('hidden', s !== 'reader');
         }
 
-        async function loadLatest() {
-            const url = document.getElementById('target-site').value;
+        function getImgSrc(img) {
+            return img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original') || img.getAttribute('data-lazy') || img.src || '';
+        }
+
+        function isLikelyContent(url) {
+            const low = url.toLowerCase();
+            if (low.includes('logo') || low.includes('avatar') || low.includes('icon') || low.includes('banner') || low.includes('sponsor') || low.includes('advert') || low.includes('popup') || low.includes('thumb') || low.includes('button') || low.includes('social')) {
+                return false;
+            }
+            const match = url.match(/\.(jpg|jpeg|png|webp|avif|gif)(\?.*)?$/i);
+            return !!match;
+        }
+
+        // Extract chapter images using DOM selectors with intelligent fallback
+        function extractChapterImages(html) {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            let images = [];
+
+            // Strategy 1: Known content area selectors (most WordPress manga sites)
+            const contentSelectors = [
+                '.reading-content img', '.chapter-content img', '.entry-content img',
+                '.page-content img', '#chapter-content img', '.chapter-page img',
+                '.text-left img', '.comic-page img', '#reader img',
+                '.chapter-images img', '.wp-manga-chapter-img img',
+                '.main-content img', '.site-content img', '#content img',
+                'article img', 'main img', '.post-content img',
+                '.entry-content p img', '.chapter-container img',
+                '.page-break img', '.comic img', '.manga-chapter img',
+                '.chapter-inner img'
+            ];
+
+            for (const selector of contentSelectors) {
+                const found = doc.querySelectorAll(selector);
+                const valid = [...found].map(getImgSrc).filter(s => s && isLikelyContent(s) && s.startsWith('http'));
+                if (valid.length > 2) {
+                    return valid;
+                }
+            }
+
+            // Strategy 2: Find the container with the most images
+            const allElements = doc.querySelectorAll('div, section, main, article');
+            let bestContainer = null;
+            let bestCount = 0;
+            allElements.forEach(el => {
+                const imgs = el.querySelectorAll('img');
+                const count = [...imgs].filter(img => {
+                    const src = getImgSrc(img);
+                    return src && isLikelyContent(src) && src.startsWith('http');
+                }).length;
+                if (count > bestCount) {
+                    bestCount = count;
+                    bestContainer = el;
+                }
+            });
+
+            if (bestContainer && bestCount > 0) {
+                images = [...bestContainer.querySelectorAll('img')].map(getImgSrc).filter(s => s && isLikelyContent(s) && s.startsWith('http'));
+                if (images.length > 0) return images;
+            }
+
+            // Strategy 3: Get all images and filter aggressively
+            images = [...doc.querySelectorAll('img')].map(getImgSrc).filter(s => s && isLikelyContent(s) && s.startsWith('http'));
+            if (images.length > 0) return images;
+
+            // Strategy 4: Regex fallback with improved filtering
+            const imgRegex = /https?:\/\/[^\s"'<>()]+\.(?:jpg|jpeg|png|webp|avif|gif)(?:\?[^\s"'<>()]*)?/gi;
+            const matches = html.match(imgRegex);
+            if (matches) {
+                return [...new Set(matches)].filter(u => isLikelyContent(u));
+            }
+
+            return [];
+        }
+
+        async function loadLatest(encodedPageUrl) {
+            const url = encodedPageUrl ? safeDecode(encodedPageUrl) : document.getElementById('target-site').value;
+            currentPageUrl = url;
             const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(url)}`);
             const html = await res.text();
             const doc = new DOMParser().parseFromString(html, 'text/html');
             const listDiv = document.getElementById('manga-list-section');
             listDiv.innerHTML = '';
             
+            currentMangaList = [];
+
+            // Try common manga link patterns
+            const knownPatterns = ['/manga/', '/doujin/', '/series/', '/comic/', '/manhwa/', '/manhua/', '/webtoon/', '/hentai/'];
+            
             doc.querySelectorAll('a').forEach(a => {
+                const href = a.href || '';
                 const img = a.querySelector('img');
-                if(img && (a.href.includes('/manga/') || a.href.includes('/doujin/'))) {
-                    listDiv.innerHTML += `
-                        <div class="cursor-pointer" onclick="openMangaDetail('${safeEncode(a.href)}')">
-                            <img src="${img.dataset.src || img.src}" class="w-full rounded mb-2">
-                            <h3 class="text-xs truncate">${a.innerText.trim() || 'Manga'}</h3>
-                        </div>`;
+                const matchPattern = knownPatterns.some(p => href.includes(p));
+                // Also match any link that looks like a content page (not home, not category)
+                const isContentLink = matchPattern || (href.includes('/') && !href.includes('#') && !href.startsWith('javascript'));
+                const title = (a.getAttribute('title') || a.innerText || '').trim();
+                
+                if (img && isContentLink && title && title.length > 1) {
+                    const item = { href, img: getImgSrc(img), title };
+                    currentMangaList.push(item);
                 }
             });
+
+            // If too few results, also try direct image+link pairs (some sites use different structures)
+            if (currentMangaList.length < 4) {
+                doc.querySelectorAll('.page-item-detail, .item, .manga-item, .post-item, article').forEach(el => {
+                    const a = el.querySelector('a');
+                    const img = el.querySelector('img');
+                    if (a && img && a.href) {
+                        const href = a.href;
+                        const title = a.getAttribute('title') || a.innerText || img.alt || '';
+                        if (title && title.length > 1 && !currentMangaList.some(m => m.href === href)) {
+                            currentMangaList.push({ href, img: getImgSrc(img), title });
+                        }
+                    }
+                });
+            }
+
+            // Deduplicate
+            const seen = new Set();
+            currentMangaList = currentMangaList.filter(m => {
+                if (seen.has(m.href)) return false;
+                seen.add(m.href);
+                return true;
+            });
+
+            currentMangaList.forEach(m => {
+                listDiv.innerHTML += `
+                    <div class="cursor-pointer" onclick="openMangaDetail('${safeEncode(m.href)}')">
+                        <img src="${m.img}" class="w-full rounded mb-2" loading="lazy" onerror="this.parentElement.style.display='none'">
+                        <h3 class="text-xs truncate">${m.title}</h3>
+                    </div>`;
+            });
+
+            if (currentMangaList.length === 0) {
+                listDiv.innerHTML = '<p class="col-span-full text-zinc-500 text-center p-8">Hiç manga bulunamadı. Site yapısı farklı olabilir.</p>';
+            }
+
+            // Pagination - find next page link
+            const nextSelectors = ['a.next', 'a.next-page', 'a[rel="next"]', '.next a', '.pagination .next a', '.nav-links a.next', '.page-nav a.next', 'a:has(span:contains("Next"))'];
+            let nextUrl = null;
+            for (const sel of nextSelectors) {
+                try {
+                    const el = doc.querySelector(sel);
+                    if (el && el.href) { nextUrl = el.href; break; }
+                } catch(e) {}
+            }
+            // Also try to find pagination by text
+            if (!nextUrl) {
+                doc.querySelectorAll('a').forEach(a => {
+                    const text = (a.innerText || '').trim().toLowerCase();
+                    if ((text === 'next' || text === 'ileri' || text === 'sonraki' || text === '→' || text === '»') && a.href) {
+                        nextUrl = a.href;
+                    }
+                });
+            }
+
+            // Remove old pagination buttons then add new ones
+            listDiv.parentElement.querySelectorAll('.pagination-controls').forEach(el => el.remove());
+            const paginationDiv = document.createElement('div');
+            paginationDiv.className = 'pagination-controls col-span-full flex justify-center gap-4 mt-6';
+            if (nextUrl) {
+                paginationDiv.innerHTML += `<button onclick="loadLatest('${safeEncode(nextUrl)}')" class="bg-amber-600 hover:bg-amber-500 text-zinc-950 px-6 py-2 rounded font-bold text-sm">Sonraki Sayfa →</button>`;
+            }
+            if (pageUrl) {
+                paginationDiv.innerHTML += `<button onclick="loadLatest()" class="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2 rounded font-bold text-sm">← Ana Sayfa</button>`;
+            }
+            if (paginationDiv.children.length > 0) {
+                listDiv.parentElement.appendChild(paginationDiv);
+            }
         }
 
         async function openMangaDetail(encodedUrl) {
             showSection('detail');
-            const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(safeDecode(encodedUrl))}`);
+            const url = safeDecode(encodedUrl);
+            const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(url)}`);
             const html = await res.text();
             const doc = new DOMParser().parseFromString(html, 'text/html');
             
-            document.getElementById('detail-title').innerText = doc.querySelector('h1')?.innerText || 'Detay';
-            document.getElementById('detail-cover').src = doc.querySelector('.summary_image img')?.src || '';
+            // Title
+            const titleEl = doc.querySelector('h1') || doc.querySelector('.post-title h1') || doc.querySelector('.entry-title') || doc.querySelector('[itemprop="name"]');
+            document.getElementById('detail-title').innerText = titleEl?.innerText || 'Detay';
             
+            // Cover
+            const coverSelectors = ['.summary_image img', '.poster img', '.thumb img', '.cover img', '[itemprop="image"]', '.entry-content img:first-child', 'article img'];
+            for (const sel of coverSelectors) {
+                const el = doc.querySelector(sel);
+                if (el) { document.getElementById('detail-cover').src = getImgSrc(el); break; }
+            }
+            
+            // Chapters
             const chaptersDiv = document.getElementById('detail-chapters');
             chaptersDiv.innerHTML = '';
-            doc.querySelectorAll('li.wp-manga-chapter a').forEach(a => {
-                chaptersDiv.innerHTML += `<button onclick="openChapter('${encodedUrl}', '${safeEncode(a.href)}', '${safeEncode(a.innerText.trim())}')" class="bg-zinc-800 p-2 text-xs rounded truncate">${a.innerText.trim()}</button>`;
-            });
+            
+            // Try multiple chapter list selectors
+            const chapterSelectors = [
+                'li.wp-manga-chapter a', '.chapter-list a', '.chap-list a',
+                '.cl-style ul li a', '.chapter-item a', '#chapters a',
+                '.listing-chapters_wrap a', 'ul.main li a', '.chapter a',
+                'table a[href*="/chapter/"]', 'a[href*="/chapter/"]',
+                'a[href*="/bolum/"]', 'a[href*="/bölüm/"]', 'a[href*="/read/"]'
+            ];
+            
+            let chapterLinks = [];
+            for (const sel of chapterSelectors) {
+                const found = doc.querySelectorAll(sel);
+                if (found.length > 0) {
+                    chapterLinks = [...found];
+                    break;
+                }
+            }
+            
+            // Also try any link containing common chapter keywords
+            if (chapterLinks.length === 0) {
+                doc.querySelectorAll('a').forEach(a => {
+                    const text = (a.innerText || '').trim().toLowerCase();
+                    const href = a.href || '';
+                    if ((text.includes('chapter') || text.includes('bolum') || text.includes('bölüm') || text.match(/ch\.?\s*\d+/) || text.match(/c\.?\s*\d+/)) && href) {
+                        chapterLinks.push(a);
+                    }
+                });
+            }
+            
+            if (chapterLinks.length === 0) {
+                chaptersDiv.innerHTML = '<p class="text-zinc-500 p-4">Bölüm bulunamadı.</p>';
+            } else {
+                chapterLinks.forEach(a => {
+                    const href = a.href || '';
+                    if (href) {
+                        chaptersDiv.innerHTML += `<button onclick="openChapter('${encodedUrl}', '${safeEncode(href)}', '${safeEncode(a.innerText.trim())}')" class="bg-zinc-800 p-2 text-xs rounded truncate">${a.innerText.trim()}</button>`;
+                    }
+                });
+            }
+        }
+
+        function proxyImg(url) {
+            return `${window.location.origin}/api/image?url=${encodeURIComponent(url)}`;
         }
 
         async function openChapter(mUrl, cUrl, title) {
@@ -119,23 +323,34 @@
             document.getElementById('reader-chapter-title').innerText = safeDecode(title);
             document.getElementById('reader-back-btn').onclick = () => openMangaDetail(mUrl);
             const chapterImages = document.getElementById('chapter-images');
-            chapterImages.innerHTML = 'Yükleniyor...';
+            chapterImages.innerHTML = '<p class="text-zinc-500 text-center p-8">Yükleniyor...</p>';
             
             const res = await fetch(`${TUNNEL_URL}${encodeURIComponent(safeDecode(cUrl))}`);
             const html = await res.text();
             
-            // MASTER REGEX: Site kaynak kodundaki her türlü görseli çeker
-            const imgRegex = /(https?:\/\/[^\s"'<>\(\)]+\.(?:jpg|jpeg|png|webp|avif))/gi;
-            const matches = html.match(imgRegex);
+            let images = extractChapterImages(html);
             
             chapterImages.innerHTML = '';
-            if(matches) {
-                const uniqueImages = [...new Set(matches)].filter(u => !u.includes('logo') && !u.includes('avatar'));
-                uniqueImages.forEach(src => {
-                    chapterImages.innerHTML += `<img src="${src}" class="w-full mb-1" loading="lazy">`;
+            if (images.length > 0) {
+                // Try direct first, fall back to proxy on error
+                images.forEach(src => {
+                    const img = document.createElement('img');
+                    img.className = 'w-full mb-1';
+                    img.loading = 'lazy';
+                    let retried = false;
+                    img.onerror = function() {
+                        if (!retried) {
+                            retried = true;
+                            this.src = proxyImg(src);
+                        } else {
+                            this.style.display = 'none';
+                        }
+                    };
+                    img.src = src;
+                    chapterImages.appendChild(img);
                 });
             } else {
-                chapterImages.innerHTML = '<p class="text-red-500 p-4">Resimler JS arkasında veya 18+ doğrulama istiyor.</p>';
+                chapterImages.innerHTML = '<p class="text-zinc-500 text-center p-4">Resimler bulunamadı. JS koruması veya farklı site yapısı olabilir.</p>';
             }
         }
     </script>
