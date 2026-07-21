@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
 const archiver = require('archiver');
+const { ZipArchive } = archiver;
 
 const PORT = process.env.PORT || 3000;
 
@@ -302,7 +303,7 @@ async function buildCbz(chapters, baseUrl, fileName) {
 
     const totalImages = allChapters.reduce((s, c) => s + c.images.length, 0);
 
-    const archive = archiver('zip', { gzip: false });
+    const archive = new ZipArchive();
     const chunks = [];
     archive.on('data', c => chunks.push(c));
 
