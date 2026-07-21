@@ -12,7 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'master-bypass-' + Math.random().toString(36),
+    secret: process.env.SESSION_SECRET || 'manhwafuta-' + Math.random().toString(36),
     resave: false,
     saveUninitialized: false,
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
@@ -550,6 +550,10 @@ function isValidContentImage(url) {
 // Serve login.html without auth
 app.get('/login.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/favicon.ico', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'favicon.ico'));
 });
 
 app.get('*', (req, res) => {
