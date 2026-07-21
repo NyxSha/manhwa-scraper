@@ -560,8 +560,20 @@ app.get('/favicon.gif', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'favicon.gif'));
 });
 
+app.get('/sw.js', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'sw.js'));
+});
+
 app.get('/manifest.json', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'manifest.json'));
+});
+
+app.get('/icon-192x192.png', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'icon-192x192.png'));
+});
+
+app.get('/icon-512x512.png', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'icon-512x512.png'));
 });
 
 app.get('*', (req, res) => {

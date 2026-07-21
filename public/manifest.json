@@ -1,16 +1,26 @@
 {
   "name": "manhwafuta",
   "short_name": "manhwafuta",
+  "description": "Manhwa Reader & Scraper",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0c0c0e",
   "theme_color": "#0c0c0e",
+  "orientation": "portrait",
+  "categories": ["entertainment", "books"],
   "icons": [
     {
-      "src": "/favicon.gif",
-      "sizes": "any",
-      "type": "image/gif",
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "screenshots": []
 }

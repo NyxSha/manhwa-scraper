@@ -8,6 +8,9 @@
     <link rel="icon" type="image/gif" href="/favicon.gif">
     <link rel="apple-touch-icon" href="/favicon.gif">
     <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0c0c0e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>manhwafuta</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -24,6 +27,7 @@
                 <input type="text" id="nav-url" class="flex-1 min-w-[200px] bg-zinc-950 border border-zinc-700 rounded px-2.5 py-1.5 text-sm text-white" placeholder="Site URL..." onchange="navigateTo(this.value)">
                 <input type="text" id="nav-search" class="w-40 bg-zinc-950 border border-zinc-700 rounded px-2.5 py-1.5 text-sm text-white" placeholder="Ara..." onkeydown="if(event.key==='Enter')doSearch()">
                 <button onclick="doSearch()" class="bg-amber-600 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 rounded text-sm font-bold">Ara</button>
+                <button id="install-btn" class="hidden text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-bold">+ Yükle</button>
                 <button onclick="logout()" class="text-xs bg-zinc-800 px-3 py-1.5 rounded text-zinc-400 hover:text-white">Logout</button>
             </div>
         </nav>
@@ -572,6 +576,32 @@
             } else {
                 chapterImages.innerHTML = '<p class="text-zinc-500 text-center p-4">Resimler bulunamadı. JS koruması veya farklı site yapısı olabilir.</p>';
             }
+        }
+
+        // PWA Install Prompt
+        let deferredPrompt = null;
+        const installBtn = document.getElementById('install-btn');
+        window.addEventListener('beforeinstallprompt', e => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.classList.remove('hidden');
+            installBtn.onclick = async () => {
+                installBtn.classList.add('hidden');
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                deferredPrompt = null;
+            };
+        });
+        window.addEventListener('appinstalled', () => {
+            deferredPrompt = null;
+            installBtn.classList.add('hidden');
+        });
+
+        // Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js');
+            });
         }
     </script>
 </body>
