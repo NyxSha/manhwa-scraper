@@ -63,6 +63,7 @@ function requireAuth(req, res, next) {
   if (req.session?.authenticated) return next();
   if (req.path.startsWith('/api/login') || req.path === '/login.html') return next();
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
+  if (req.path.match(/\.(ico|gif|png|svg|js|json|css)$/)) return next();
   res.redirect('/login.html');
 }
 
