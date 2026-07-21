@@ -12,25 +12,15 @@
 </head>
 <body>
 
-    <div id="auth-panel" class="fixed inset-0 bg-zinc-950 flex items-center justify-center z-50 p-4">
-        <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl w-full max-w-md shadow-2xl">
-            <h2 class="text-xl font-bold text-amber-500 mb-4 text-center tracking-wider">DOZER MASTER CORE</h2>
-            <div class="space-y-4">
-                <input type="password" id="secret-code" class="w-full bg-zinc-950 border border-zinc-700 rounded p-2.5 text-center text-white" value="123456">
-                <input type="text" id="target-site" class="w-full bg-zinc-950 border border-zinc-700 rounded p-2.5 text-white" value="https://hentaixdickgirl.com">
-                <button onclick="verifyAndConnect()" class="w-full bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold p-3 rounded transition">Sistemi Başlat</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="app-content" class="hidden">
+    <input type="hidden" id="target-site" value="https://hentaixdickgirl.com">
+    <div id="app-content">
         <nav class="bg-zinc-900 px-3 py-2 border-b border-zinc-800 sticky top-0 z-40">
             <div class="flex items-center gap-2 flex-wrap">
                 <h1 class="text-lg font-bold text-amber-500 cursor-pointer shrink-0" onclick="showSection('list'); loadLatest()">MASTER READER</h1>
                 <input type="text" id="nav-url" class="flex-1 min-w-[200px] bg-zinc-950 border border-zinc-700 rounded px-2.5 py-1.5 text-sm text-white" placeholder="Site URL..." onchange="navigateTo(this.value)">
                 <input type="text" id="nav-search" class="w-40 bg-zinc-950 border border-zinc-700 rounded px-2.5 py-1.5 text-sm text-white" placeholder="Ara..." onkeydown="if(event.key==='Enter')doSearch()">
                 <button onclick="doSearch()" class="bg-amber-600 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 rounded text-sm font-bold">Ara</button>
-                <button onclick="lockSystem()" class="text-xs bg-zinc-800 px-3 py-1.5 rounded text-zinc-400 hover:text-white">Çıkış</button>
+                <button onclick="logout()" class="text-xs bg-zinc-800 px-3 py-1.5 rounded text-zinc-400 hover:text-white">Logout</button>
             </div>
         </nav>
         
@@ -66,25 +56,20 @@
         let currentMangaList = [];
         let currentSiteUrl = '';
 
-        function verifyAndConnect() {
-            if(document.getElementById('secret-code').value === "123456") {
-                document.getElementById('auth-panel').classList.add('hidden');
-                document.getElementById('app-content').classList.remove('hidden');
-                showSection('list');
-                loadLatest();
-            }
-        }
-
-        function lockSystem() {
-            document.getElementById('auth-panel').classList.remove('hidden');
-            document.getElementById('app-content').classList.add('hidden');
-        }
-
         function showSection(s) {
             document.getElementById('manga-list-section').classList.toggle('hidden', s !== 'list');
             document.getElementById('manga-detail-section').classList.toggle('hidden', s !== 'detail');
             document.getElementById('reader-section').classList.toggle('hidden', s !== 'reader');
         }
+
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/login.html';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadLatest();
+        });
 
         function getImgSrc(img) {
             return (img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original') || img.getAttribute('data-lazy') || img.getAttribute('data-srcset') || img.src || '').trim();

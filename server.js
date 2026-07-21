@@ -2,11 +2,17 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const path = require('path');
+const session = require('express-session');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'master-bypass-' + Math.random().toString(36),
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 24 * 60 * 60 * 1000 }
+}));
 
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
@@ -28,6 +34,47 @@ const getHeaders = (targetUrl, accept = 'text/html,application/xhtml+xml,applica
         'Upgrade-Insecure-Requests': '1'
     };
 };
+
+const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+const ADMIN_PASS = process.env.ADMIN_PASS || 'admin';
+
+// Auth middleware - check session for protected routes
+const requireAuth = (req, res, next) => {
+    if (req.session && req.session.authenticated) {
+        return next();
+    }
+    if (req.path.startsWith('/api/login') || req.path === '/login.html') {
+        return next();
+    }
+    if (req.path.startsWith('/api/')) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    res.redirect('/login.html');
+};
+
+// Login API
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    if (username === ADMIN_USER && password === ADMIN_PASS) {
+        req.session.authenticated = true;
+        return res.json({ success: true });
+    }
+    res.status(401).json({ success: false, error: 'Invalid credentials' });
+});
+
+// Logout
+app.post('/api/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ success: true });
+});
+
+// Check auth status
+app.get('/api/check-auth', (req, res) => {
+    res.json({ authenticated: !!(req.session && req.session.authenticated) });
+});
+
+// Apply auth to all routes below
+app.use(requireAuth);
 
 const tunnelAxios = axios.create({
     timeout: 20000,
@@ -189,6 +236,11 @@ app.get('/api/image', async (req, res) => {
         console.error(`[Resim Hatası] ${url} -> ${error.message}`);
         res.status(502).json({ error: 'Resim yüklenemedi.' });
     }
+});
+
+// Serve login.html without auth
+app.get('/login.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
 app.get('*', (req, res) => {
