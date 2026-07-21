@@ -24,10 +24,6 @@
 
     .bg-gradient-main { background: linear-gradient(135deg, #0a0a0f 0%, #0f0a1a 50%, #0a0a0f 100%); }
     .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.06); }
-    .glass-hover:hover { background: rgba(255,255,255,0.06); border-color: rgba(168,85,247,0.2); }
-    .glow-purple { box-shadow: 0 0 30px rgba(168,85,247,0.08), 0 0 60px rgba(168,85,247,0.04); }
-    .glow-pink { box-shadow: 0 0 30px rgba(236,72,153,0.08), 0 0 60px rgba(236,72,153,0.04); }
-
     .card { background: linear-gradient(145deg, rgba(18,18,28,0.9), rgba(24,24,38,0.9)); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; transition: all 0.3s cubic-bezier(0.4,0,0.2,1); overflow: hidden; }
     .card:hover { transform: translateY(-4px); border-color: rgba(168,85,247,0.25); box-shadow: 0 12px 40px rgba(168,85,247,0.12); }
 
@@ -37,12 +33,13 @@
 
     .btn-primary { background: linear-gradient(135deg, #a855f7, #ec4899); color: white; font-weight: 600; border: none; border-radius: 10px; padding: 8px 20px; cursor: pointer; transition: all 0.25s ease; }
     .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(168,85,247,0.3); }
-    .btn-primary:active { transform: translateY(0); }
     .btn-secondary { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 8px 16px; color: #94a3b8; cursor: pointer; transition: all 0.2s ease; font-size: 13px; }
     .btn-secondary:hover { background: rgba(255,255,255,0.08); color: white; }
+    .btn-danger { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.2); border-radius: 10px; padding: 8px 16px; color: #f87171; cursor: pointer; transition: all 0.2s; font-size: 13px; }
+    .btn-danger:hover { background: rgba(239,68,68,0.2); }
 
     input[type="text"], input[type="search"] { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 9px 14px; color: white; outline: none; transition: all 0.2s; font-size: 14px; }
-    input[type="text"]:focus, input[type="search"]:focus { border-color: rgba(168,85,247,0.4); box-shadow: 0 0 20px rgba(168,85,247,0.06); }
+    input[type="text"]:focus, input[type="search"]:focus { border-color: rgba(168,85,247,0.4); }
 
     .chapter-btn { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 10px 14px; color: #cbd5e1; cursor: pointer; transition: all 0.2s; text-align: left; font-size: 13px; }
     .chapter-btn:hover { background: rgba(168,85,247,0.1); border-color: rgba(168,85,247,0.25); color: white; }
@@ -56,21 +53,33 @@
     .toast-info { background: linear-gradient(135deg, #7c3aed, #a855f7); }
     @keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-    .skeleton { background: linear-gradient(90deg, #1a1a2e 25%, #24243e 50%, #1a1a2e 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 12px; }
-    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-
     #loading-overlay { position: fixed; inset: 0; background: rgba(10,10,15,0.85); backdrop-filter: blur(8px); z-index: 100; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
     #loading-overlay.active { display: flex; }
     .spinner { width: 40px; height: 40px; border: 3px solid rgba(168,85,247,0.15); border-top-color: #a855f7; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .progress-bar { width: 240px; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #a855f7, #ec4899); border-radius: 2px; transition: width 0.3s; }
+
+    .badge-purple { background: rgba(168,85,247,0.12); color: #c084fc; padding: 2px 8px; border-radius: 6px; font-size: 11px; }
+    .badge-emerald { background: rgba(16,185,129,0.12); color: #6ee7b7; padding: 2px 8px; border-radius: 6px; font-size: 11px; }
+    .badge-size { background: rgba(255,255,255,0.04); color: #94a3b8; padding: 2px 8px; border-radius: 6px; font-size: 11px; }
+
+    .offline-indicator { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; }
+    .offline-indicator.online { background: #10b981; }
+    .offline-indicator.offline { background: #ef4444; }
 
     @media (max-width: 640px) { .chapter-grid { grid-template-columns: 1fr; } .manga-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
     @media (min-width: 641px) and (max-width: 1023px) { .manga-grid { grid-template-columns: repeat(3, 1fr); } }
     @media (min-width: 1024px) { .manga-grid { grid-template-columns: repeat(5, 1fr); } }
+    .downloads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
   </style>
 </head>
 <body class="bg-gradient-main">
-  <div id="loading-overlay"><div class="spinner"></div><div class="text-sm text-zinc-400" id="loading-text">Yükleniyor...</div></div>
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div class="text-sm text-zinc-400" id="loading-text">Yükleniyor...</div>
+    <div class="progress-bar mt-2"><div class="progress-fill" id="progress-fill"></div></div>
+  </div>
 
   <nav class="sticky top-0 z-50 glass" style="border-bottom: 1px solid rgba(168,85,247,0.1);">
     <div class="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2 flex-wrap">
@@ -78,6 +87,7 @@
       <input type="text" id="nav-url" class="flex-1 min-w-[180px] text-sm" placeholder="Site URL..." onchange="navigateTo(this.value)">
       <input type="search" id="nav-search" class="w-36 text-sm" placeholder="Ara..." onkeydown="if(event.key==='Enter')doSearch()">
       <button onclick="doSearch()" class="btn-primary text-xs px-3 py-2">Ara</button>
+      <button onclick="openDownloads()" id="nav-downloads" class="btn-secondary text-xs whitespace-nowrap">📥 İndirilenler</button>
       <button id="install-btn" class="hidden text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-semibold">+ Yükle</button>
       <button onclick="logout()" class="btn-secondary text-xs">Çıkış</button>
     </div>
@@ -97,7 +107,10 @@
           <img id="detail-cover" class="w-full sm:w-52 rounded-xl manga-cover" style="aspect-ratio: 3/4;">
           <div class="flex-1 min-w-0">
             <h2 id="detail-title" class="text-xl sm:text-2xl font-bold mb-3" style="background: linear-gradient(135deg,#a855f7,#ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></h2>
-            <button id="detail-download-btn" class="hidden btn-primary text-sm w-full mb-4" onclick="downloadFullManga()">⬇ Tümünü CBZ İndir</button>
+            <div class="flex gap-2 mb-4">
+              <button id="detail-save-btn" class="hidden btn-primary text-sm px-4 py-2" onclick="saveMangaLocal()">💾 Cihaza Kaydet</button>
+              <button id="detail-download-btn" class="hidden btn-secondary text-sm px-4 py-2" onclick="downloadFullManga()">⬇ CBZ İndir</button>
+            </div>
             <div id="detail-chapters" class="chapter-grid grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-96 overflow-y-auto pr-1"></div>
           </div>
         </div>
@@ -112,12 +125,36 @@
           <button id="reader-prev-btn" class="btn-secondary text-xs hidden">← Önceki</button>
           <button id="reader-next-btn" class="btn-secondary text-xs hidden">Sonraki →</button>
           <button id="reader-download-btn" class="hidden btn-primary text-xs px-3 py-1.5" onclick="downloadCurrentChapter()">⬇ CBZ</button>
+          <button id="reader-save-btn" class="hidden btn-primary text-xs px-3 py-1.5" style="background: linear-gradient(135deg,#059669,#10b981);" onclick="saveCurrentChapter()">💾 Kaydet</button>
         </div>
       </div>
       <div id="chapter-images" class="flex flex-col gap-1"></div>
       <div class="flex justify-center gap-3 mt-4 pb-8">
         <button id="reader-bottom-prev" class="btn-secondary text-xs hidden">← Önceki Bölüm</button>
         <button id="reader-bottom-next" class="btn-secondary text-xs hidden">Sonraki Bölüm →</button>
+      </div>
+    </div>
+
+    <div id="downloads-section" class="section-enter hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold" style="background: linear-gradient(135deg,#a855f7,#ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">📥 İndirilenler</h2>
+        <span id="storage-info" class="text-xs text-zinc-500"></span>
+      </div>
+      <div id="downloads-grid" class="downloads-grid"></div>
+    </div>
+
+    <div id="local-detail-section" class="section-enter hidden">
+      <button onclick="openDownloads()" class="btn-secondary mb-4">← İndirilenler</button>
+      <div class="card p-4 sm:p-6">
+        <div class="flex flex-col sm:flex-row gap-5">
+          <img id="local-detail-cover" class="w-full sm:w-52 rounded-xl manga-cover" style="aspect-ratio: 3/4;">
+          <div class="flex-1 min-w-0">
+            <h2 id="local-detail-title" class="text-xl sm:text-2xl font-bold mb-3" style="background: linear-gradient(135deg,#a855f7,#ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></h2>
+            <p id="local-detail-info" class="text-xs text-zinc-500 mb-3"></p>
+            <button id="local-detail-delete" class="btn-danger text-sm mb-4 w-full" onclick="deleteLocalManga()">🗑 Cihazdan Kaldır</button>
+            <div id="local-detail-chapters" class="chapter-grid grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-96 overflow-y-auto pr-1"></div>
+          </div>
+        </div>
       </div>
     </div>
   </main>
@@ -127,14 +164,9 @@
     const safeEncode = s => btoa(encodeURIComponent(s));
     const safeDecode = s => decodeURIComponent(atob(s));
 
-    let currentPageUrl = '';
-    let currentSiteUrl = '';
-    let currentMangaList = [];
-    let chaptersList = [];
-    let chapterIndex = -1;
-    let currentChapterImages = [];
-    let currentMangaUrl = '';
-    let currentChapterReferer = '';
+    let currentPageUrl = '', currentSiteUrl = '', currentMangaUrl = '', currentChapterReferer = '';
+    let currentMangaList = [], chaptersList = [], chapterIndex = -1, currentChapterImages = [];
+    let currentMangaTitle = '', currentCoverUrl = '';
 
     function $(id) { return document.getElementById(id); }
 
@@ -148,13 +180,20 @@
 
     function showLoading(text) { $('loading-text').textContent = text || 'Yükleniyor...'; $('loading-overlay').classList.add('active'); }
     function hideLoading() { $('loading-overlay').classList.remove('active'); }
+    function setProgress(pct) { $('progress-fill').style.width = Math.min(pct, 100) + '%'; }
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    }
 
     function showSection(s) {
-      ['manga-list-section', 'manga-detail-section', 'reader-section'].forEach(id => {
-        $ (id).classList.toggle('hidden', id !== s);
-        if (id === s) $ (id).classList.remove('section-enter');
-        if (id === s) void $ (id).offsetHeight;
-        if (id === s) $ (id).classList.add('section-enter');
+      ['manga-list-section','manga-detail-section','reader-section','downloads-section','local-detail-section'].forEach(id => {
+        const el = $(id);
+        if (!el) return;
+        el.classList.toggle('hidden', id !== s);
+        if (id === s) { el.classList.remove('section-enter'); void el.offsetHeight; el.classList.add('section-enter'); }
       });
     }
 
@@ -184,9 +223,117 @@
     function doSearch() {
       const q = $('nav-search').value.trim();
       if (!q) return;
-      const site = fixUrl($('nav-url').value || $('target-site')?.value || '').replace(/\/+$/, '');
+      const site = fixUrl($('nav-url').value || '').replace(/\/+$/, '');
       navigateTo(site + '/?s=' + encodeURIComponent(q));
     }
+
+    // ---- IndexedDB ----
+    const DB = {
+      _db: null,
+      _ready: null,
+      _open() {
+        if (this._ready) return this._ready;
+        this._ready = new Promise((resolve, reject) => {
+          const rq = indexedDB.open('manhwafuta', 1);
+          rq.onupgradeneeded = e => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('manga')) {
+              const store = db.createObjectStore('manga', { keyPath: 'mangaUrl' });
+              store.createIndex('downloadedAt', 'downloadedAt');
+            }
+            if (!db.objectStoreNames.contains('chapters')) {
+              const store = db.createObjectStore('chapters', { keyPath: 'chapterUrl' });
+              store.createIndex('mangaUrl', 'mangaUrl');
+            }
+          };
+          rq.onsuccess = e => { this._db = e.target.result; resolve(this._db); };
+          rq.onerror = e => reject(e.target.error);
+        });
+        return this._ready;
+      },
+      async saveManga(info) {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('manga', 'readwrite');
+          tx.objectStore('manga').put({ ...info, downloadedAt: new Date().toISOString() });
+          tx.oncomplete = () => resolve();
+          tx.onerror = e => reject(e.target.error);
+        });
+      },
+      async getManga(mangaUrl) {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('manga', 'readonly');
+          const rq = tx.objectStore('manga').get(mangaUrl);
+          rq.onsuccess = () => resolve(rq.result);
+          rq.onerror = e => reject(e.target.error);
+        });
+      },
+      async getAllManga() {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('manga', 'readonly');
+          const rq = tx.objectStore('manga').getAll();
+          rq.onsuccess = () => resolve(rq.result || []);
+          rq.onerror = e => reject(e.target.error);
+        });
+      },
+      async deleteManga(mangaUrl) {
+        const db = await this._open();
+        const tx = db.transaction(['manga','chapters'], 'readwrite');
+        tx.objectStore('manga').delete(mangaUrl);
+        const idx = tx.objectStore('chapters').index('mangaUrl');
+        idx.openCursor(mangaUrl).onsuccess = e => {
+          const cursor = e.target.result;
+          if (cursor) { cursor.delete(); cursor.continue(); }
+        };
+        return new Promise((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = e => reject(e.target.error);
+        });
+      },
+      async saveChapter(ch) {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('chapters', 'readwrite');
+          tx.objectStore('chapters').put({ ...ch, downloadedAt: new Date().toISOString() });
+          tx.oncomplete = () => resolve();
+          tx.onerror = e => reject(e.target.error);
+        });
+      },
+      async getChapter(chapterUrl) {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('chapters', 'readonly');
+          const rq = tx.objectStore('chapters').get(chapterUrl);
+          rq.onsuccess = () => resolve(rq.result);
+          rq.onerror = e => reject(e.target.error);
+        });
+      },
+      async getChaptersByManga(mangaUrl) {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('chapters', 'readonly');
+          const rq = tx.objectStore('chapters').index('mangaUrl').getAll(mangaUrl);
+          rq.onsuccess = () => resolve(rq.result || []);
+          rq.onerror = e => reject(e.target.error);
+        });
+      },
+      async getTotalSize() {
+        const db = await this._open();
+        const chapters = await this.getAllChapters();
+        return chapters.reduce((s, c) => s + (c.size || 0), 0);
+      },
+      async getAllChapters() {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('chapters', 'readonly');
+          const rq = tx.objectStore('chapters').getAll();
+          rq.onsuccess = () => resolve(rq.result || []);
+          rq.onerror = e => reject(e.target.error);
+        });
+      }
+    };
 
     document.addEventListener('DOMContentLoaded', () => loadLatest());
 
@@ -196,21 +343,18 @@
       if (encodedPageUrl) {
         try { url = safeDecode(encodedPageUrl); } catch (_) { url = encodedPageUrl; }
       } else {
-        url = $('target-site')?.value || 'https://hentaixdickgirl.com';
+        url = 'https://hentaixdickgirl.com';
       }
       url = fixUrl(url);
       currentPageUrl = url;
       try { currentSiteUrl = new URL(url).origin; } catch (_) {}
       $('nav-url').value = url;
-
       try {
         const res = await fetch(TUNNEL_URL + encodeURIComponent(url));
         const html = await res.text();
         const doc = new DOMParser().parseFromString(html, 'text/html');
         renderMangaGrid(doc, url, encodedPageUrl);
-      } catch (e) {
-        toast('Site yüklenemedi: ' + e.message, 'error');
-      }
+      } catch (e) { toast('Site yüklenemedi: ' + e.message, 'error'); }
       hideLoading();
     }
 
@@ -218,36 +362,28 @@
       const grid = $('manga-grid');
       grid.innerHTML = '';
       currentMangaList = [];
-
       const patterns = ['/manga/', '/doujin/', '/series/', '/comic/', '/manhwa/', '/manhua/', '/webtoon/', '/hentai/'];
       const items = new Map();
-
-      // Strategy 1: Common manga links
       doc.querySelectorAll('a').forEach(a => {
         const href = a.href || '';
         const img = a.querySelector('img');
         const title = (a.getAttribute('title') || a.innerText || '').trim();
-        if (img && patterns.some(p => href.includes(p)) && title && title.length > 1) {
-          if (!items.has(href)) items.set(href, { href, img: getImgSrc(img), title });
+        if (img && patterns.some(p => href.includes(p)) && title && title.length > 1 && !items.has(href)) {
+          items.set(href, { href, img: getImgSrc(img), title });
         }
       });
-
-      // Strategy 2: Known containers
       if (items.size < 4) {
         doc.querySelectorAll('.page-item-detail, .item, .manga-item, .post-item, article').forEach(el => {
-          const a = el.querySelector('a');
-          const img = el.querySelector('img');
+          const a = el.querySelector('a'); const img = el.querySelector('img');
           if (a && img && a.href && !items.has(a.href)) {
             const title = a.getAttribute('title') || a.innerText || img.alt || '';
             if (title && title.length > 1) items.set(a.href, { href: a.href, img: getImgSrc(img), title });
           }
         });
       }
-
       currentMangaList = [...items.values()];
-
       if (currentMangaList.length === 0) {
-        grid.innerHTML = '<div class="col-span-full text-center py-16 text-zinc-600"><div class="text-5xl mb-4 opacity-30">&#x1F4D6;</div><p class="text-lg">Hiç manga bulunamadı</p><p class="text-sm mt-1">Site yapısı farklı olabilir, başka bir URL deneyin.</p></div>';
+        grid.innerHTML = '<div class="col-span-full text-center py-16 text-zinc-600"><div class="text-5xl mb-4 opacity-30">&#x1F4D6;</div><p class="text-lg">Hiç manga bulunamadı</p></div>';
       } else {
         currentMangaList.forEach(m => {
           const div = document.createElement('div');
@@ -257,47 +393,25 @@
           grid.appendChild(div);
         });
       }
-
-      // Pagination
       const pagRoot = $('pagination-root');
       pagRoot.innerHTML = '';
-      const nextSelectors = ['a.next', 'a.next-page', 'a[rel="next"]', '.next a', '.pagination .next a', '.nav-links a.next', '.page-nav a.next'];
+      const nextSelectors = ['a.next','a.next-page','a[rel="next"]','.next a','.pagination .next a','.nav-links a.next','.page-nav a.next'];
       let nextUrl = null;
-      for (const sel of nextSelectors) {
-        try { const el = doc.querySelector(sel); if (el?.href) { nextUrl = el.href; break; } } catch (_) {}
-      }
+      for (const sel of nextSelectors) { try { const el = doc.querySelector(sel); if (el?.href) { nextUrl = el.href; break; } } catch (_) {} }
       if (!nextUrl) {
         doc.querySelectorAll('a').forEach(a => {
-          const text = (a.innerText || '').trim().toLowerCase();
-          if ((text === 'next' || text === 'ileri' || text === 'sonraki' || text === '→' || text === '»') && a.href) nextUrl = a.href;
+          const t = (a.innerText || '').trim().toLowerCase();
+          if ((t === 'next' || t === 'ileri' || t === 'sonraki' || t === '→' || t === '»') && a.href) nextUrl = a.href;
         });
       }
-
-      if (nextUrl) {
-        const btn = document.createElement('button');
-        btn.className = 'btn-primary text-sm';
-        btn.textContent = 'Sonraki Sayfa →';
-        btn.onclick = () => navigateTo(safeEncode(nextUrl));
-        pagRoot.appendChild(btn);
-      }
-      if (encodedPageUrl) {
-        const btn = document.createElement('button');
-        btn.className = 'btn-secondary text-sm';
-        btn.textContent = '← Ana Sayfa';
-        btn.onclick = () => navigateTo('');
-        pagRoot.appendChild(btn);
-      }
-
-      // Nav links
+      if (nextUrl) { const b = document.createElement('button'); b.className = 'btn-primary text-sm'; b.textContent = 'Sonraki Sayfa →'; b.onclick = () => navigateTo(safeEncode(nextUrl)); pagRoot.appendChild(b); }
+      if (encodedPageUrl) { const b = document.createElement('button'); b.className = 'btn-secondary text-sm'; b.textContent = '← Ana Sayfa'; b.onclick = () => navigateTo(''); pagRoot.appendChild(b); }
       const navRoot = $('nav-links-root');
       navRoot.innerHTML = '';
-      const navLinks = [];
-      const seen = new Set();
-      let origin;
-      try { origin = new URL(currentSiteUrl).origin; } catch (_) { origin = ''; }
+      const navLinks = []; const seen = new Set();
+      let origin; try { origin = new URL(currentSiteUrl).origin; } catch (_) { origin = ''; }
       doc.querySelectorAll('.navbar-nav a, .main-nav a, .menu-menu a, nav a, .navigation a, .menu a, .nav a, [class*="menu"] a, [class*="nav"] a').forEach(a => {
-        let href = a.href || '';
-        const text = (a.innerText || '').trim();
+        let href = a.href || ''; const text = (a.innerText || '').trim();
         if (!href || !text || text.length > 30 || href.startsWith('javascript:') || href === '#') return;
         try { href = new URL(href, currentSiteUrl).href; } catch (_) { return; }
         if (origin && !href.startsWith(origin)) return;
@@ -305,15 +419,8 @@
         if (!seen.has(href)) { seen.add(href); navLinks.push({ href, text }); }
       });
       if (navLinks.length > 0) {
-        const wrap = document.createElement('div');
-        wrap.className = 'flex flex-wrap gap-2';
-        navLinks.slice(0, 20).forEach(n => {
-          const btn = document.createElement('button');
-          btn.className = 'btn-secondary text-xs';
-          btn.textContent = n.text;
-          btn.onclick = () => navigateTo(safeEncode(n.href));
-          wrap.appendChild(btn);
-        });
+        const wrap = document.createElement('div'); wrap.className = 'flex flex-wrap gap-2';
+        navLinks.slice(0, 20).forEach(n => { const b = document.createElement('button'); b.className = 'btn-secondary text-xs'; b.textContent = n.text; b.onclick = () => navigateTo(safeEncode(n.href)); wrap.appendChild(b); });
         navRoot.appendChild(wrap);
       }
     }
@@ -324,80 +431,42 @@
       const url = safeDecode(encodedUrl);
       currentMangaUrl = url;
       chaptersList = [];
-
+      currentMangaTitle = '';
+      currentCoverUrl = '';
       try {
         const res = await fetch(TUNNEL_URL + encodeURIComponent(url));
         const html = await res.text();
         const doc = new DOMParser().parseFromString(html, 'text/html');
-
-        // Title
         const titleEl = doc.querySelector('h1') || doc.querySelector('.post-title h1') || doc.querySelector('.entry-title') || doc.querySelector('[itemprop="name"]');
-        $('detail-title').textContent = titleEl?.textContent?.trim() || 'Detay';
-
-        // Cover
-        const coverSel = ['.summary_image img', '.poster img', '.thumb img', '.cover img', '[itemprop="image"]', '.entry-content img', 'article img'];
-        for (const sel of coverSel) {
-          const el = doc.querySelector(sel);
-          if (el) { $('detail-cover').src = getImgSrc(el); break; }
-        }
-
-        // Chapters
+        currentMangaTitle = titleEl?.textContent?.trim() || 'Detay';
+        $('detail-title').textContent = currentMangaTitle;
+        const coverSel = ['.summary_image img','.poster img','.thumb img','.cover img','[itemprop="image"]','.entry-content img','article img'];
+        for (const sel of coverSel) { const el = doc.querySelector(sel); if (el) { currentCoverUrl = getImgSrc(el); $('detail-cover').src = currentCoverUrl; break; } }
         const chDiv = $('detail-chapters');
         chDiv.innerHTML = '';
-        const chSelectors = [
-          'li.wp-manga-chapter a', '.chapter-list a', '.chap-list a',
-          '.cl-style ul li a', '.chapter-item a', '#chapters a',
-          '.listing-chapters_wrap a', 'ul.main li a', '.chapter a',
-          'a[href*="/chapter/"]', 'a[href*="/bolum/"]', 'a[href*="/bölüm/"]', 'a[href*="/read/"]'
-        ];
+        const chSelectors = ['li.wp-manga-chapter a','.chapter-list a','.chap-list a','.cl-style ul li a','.chapter-item a','#chapters a','.listing-chapters_wrap a','ul.main li a','.chapter a','a[href*="/chapter/"]','a[href*="/bolum/"]','a[href*="/bölüm/"]','a[href*="/read/"]'];
         let chLinks = [];
-        for (const sel of chSelectors) {
-          const found = doc.querySelectorAll(sel);
-          if (found.length > 0) { chLinks = [...found]; break; }
-        }
-
-        // Fallback: keyword-based
+        for (const sel of chSelectors) { const f = doc.querySelectorAll(sel); if (f.length > 0) { chLinks = [...f]; break; } }
         if (chLinks.length === 0) {
           doc.querySelectorAll('a').forEach(a => {
-            const text = (a.innerText || '').trim().toLowerCase();
-            const href = a.href || '';
-            if ((text.includes('chapter') || text.includes('bolum') || text.includes('bölüm') || /ch\.?\s*\d+/i.test(text)) && href) chLinks.push(a);
+            const t = (a.innerText || '').trim().toLowerCase();
+            if ((t.includes('chapter') || t.includes('bolum') || t.includes('bölüm') || /ch\.?\s*\d+/i.test(t)) && a.href) chLinks.push(a);
           });
         }
-
-        // Fallback: read buttons
+        if (chLinks.length === 0) doc.querySelectorAll('#btn-read-first, #btn-read-last, .c-btn[href*="/manga/"]').forEach(a => { if (a.href && !chLinks.some(l => l.href === a.href)) chLinks.push(a); });
         if (chLinks.length === 0) {
-          doc.querySelectorAll('#btn-read-first, #btn-read-last, .c-btn[href*="/manga/"]').forEach(a => {
-            const href = a.href || '';
-            if (href && !chLinks.some(l => l.href === href)) chLinks.push(a);
-          });
+          try { const apiRes = await fetch(`/api/chapters?url=${encodeURIComponent(url)}`); const apiData = await apiRes.json(); if (apiData.chapters?.length > 0) apiData.chapters.forEach(ch => { const a = doc.createElement('a'); a.href = ch.href; a.textContent = ch.title; chLinks.push(a); }); } catch (_) {}
         }
-
-        // Fallback: server API
-        if (chLinks.length === 0) {
-          try {
-            const apiRes = await fetch(`/api/chapters?url=${encodeURIComponent(url)}`);
-            const apiData = await apiRes.json();
-            if (apiData.chapters?.length > 0) {
-              apiData.chapters.forEach(ch => {
-                const a = doc.createElement('a');
-                a.href = ch.href;
-                a.textContent = ch.title;
-                chLinks.push(a);
-              });
-            }
-          } catch (_) {}
-        }
-
         if (chLinks.length === 0) {
           chDiv.innerHTML = '<p class="text-zinc-500 p-4 text-sm">Bölüm bulunamadı.</p>';
+          $('detail-save-btn').classList.add('hidden');
           $('detail-download-btn').classList.add('hidden');
         } else {
+          $('detail-save-btn').classList.remove('hidden');
           $('detail-download-btn').classList.remove('hidden');
           chaptersList = [];
           chLinks.forEach((a, idx) => {
-            const href = a.href || '';
-            if (!href) return;
+            const href = a.href || ''; if (!href) return;
             chaptersList.push({ href, title: a.textContent?.trim() || 'Bölüm ' + (idx + 1) });
             const btn = document.createElement('button');
             btn.className = 'chapter-btn';
@@ -406,45 +475,67 @@
             chDiv.appendChild(btn);
           });
         }
-      } catch (e) {
-        toast('Detay yüklenemedi: ' + e.message, 'error');
-      }
+      } catch (e) { toast('Detay yüklenemedi: ' + e.message, 'error'); }
       hideLoading();
     }
 
-    async function openChapter(mUrl, cUrl, title) {
+    async function openChapter(mUrl, cUrl, title, localMode) {
       showSection('reader');
       showLoading('Bölüm yükleniyor...');
-      const decodedUrl = safeDecode(cUrl);
+      const decodedUrl = localMode ? cUrl : safeDecode(cUrl);
+      const mangaEncoded = localMode ? mUrl : mUrl;
       chapterIndex = chaptersList.findIndex(c => c.href === decodedUrl);
-      currentChapterReferer = safeDecode(mUrl);
+      currentChapterReferer = localMode ? mUrl : safeDecode(mUrl);
 
-      $('reader-chapter-title').textContent = safeDecode(title);
-      $('reader-back-btn').onclick = () => openMangaDetail(mUrl);
+      const titleText = localMode ? title : safeDecode(title);
+      $('reader-chapter-title').textContent = titleText;
+      $('reader-back-btn').onclick = () => localMode ? openLocalManga(mUrl) : openMangaDetail(mUrl);
       $('reader-download-btn').classList.remove('hidden');
+      $('reader-save-btn').classList.remove('hidden');
 
-      // Chapter nav
-      const prevBtn = $('reader-prev-btn');
-      const nextBtn = $('reader-next-btn');
-      const bottomPrev = $('reader-bottom-prev');
-      const bottomNext = $('reader-bottom-next');
+      const prevBtn = $('reader-prev-btn'), nextBtn = $('reader-next-btn');
+      const bottomPrev = $('reader-bottom-prev'), bottomNext = $('reader-bottom-next');
 
       if (chapterIndex > 0) {
         prevBtn.classList.remove('hidden'); bottomPrev.classList.remove('hidden');
-        prevBtn.onclick = () => openChapter(mUrl, safeEncode(chaptersList[chapterIndex - 1].href), safeEncode(chaptersList[chapterIndex - 1].title));
-        bottomPrev.onclick = prevBtn.onclick;
+        const goPrev = () => openChapter(mUrl, safeEncode(chaptersList[chapterIndex - 1].href), safeEncode(chaptersList[chapterIndex - 1].title), localMode);
+        prevBtn.onclick = goPrev; bottomPrev.onclick = goPrev;
       } else { prevBtn.classList.add('hidden'); bottomPrev.classList.add('hidden'); }
 
       if (chapterIndex < chaptersList.length - 1) {
         nextBtn.classList.remove('hidden'); bottomNext.classList.remove('hidden');
-        nextBtn.onclick = () => openChapter(mUrl, safeEncode(chaptersList[chapterIndex + 1].href), safeEncode(chaptersList[chapterIndex + 1].title));
-        bottomNext.onclick = nextBtn.onclick;
+        const goNext = () => openChapter(mUrl, safeEncode(chaptersList[chapterIndex + 1].href), safeEncode(chaptersList[chapterIndex + 1].title), localMode);
+        nextBtn.onclick = goNext; bottomNext.onclick = goNext;
       } else { nextBtn.classList.add('hidden'); bottomNext.classList.add('hidden'); }
 
       const imgContainer = $('chapter-images');
       imgContainer.innerHTML = '';
 
       try {
+        // Try local first
+        const localCh = await DB.getChapter(decodedUrl);
+        if (localCh?.images?.length > 0) {
+          hideLoading();
+          currentChapterImages = localCh.images.map(i => i.url);
+          // Show as online URLs but with local blob fallback
+          for (const img of localCh.images) {
+            const el = document.createElement('img');
+            el.className = 'reader-img w-full rounded-lg mb-1';
+            el.loading = 'lazy';
+            el.src = img.url;
+            el.onload = function () { this.classList.add('loaded'); };
+            el.onerror = function () {
+              // Fallback to local blob
+              if (img.data && this.src !== URL.createObjectURL(img.data)) {
+                this.src = URL.createObjectURL(img.data);
+              } else { this.style.display = 'none'; }
+            };
+            imgContainer.appendChild(el);
+          }
+          return;
+        }
+
+        // Network
         const res = await fetch(TUNNEL_URL + encodeURIComponent(decodedUrl));
         const html = await res.text();
         let images = extractChapterImages(html);
@@ -454,15 +545,12 @@
           imgContainer.innerHTML = '<p class="text-zinc-500 text-center py-16 text-sm">Resimler bulunamadı.</p>';
         } else {
           hideLoading();
-          images.forEach((src, i) => {
+          images.forEach(src => {
             const img = document.createElement('img');
             img.className = 'reader-img w-full rounded-lg mb-1';
             img.loading = 'lazy';
             let retried = false;
-            img.onerror = function () {
-              if (!retried) { retried = true; this.src = window.location.origin + '/api/image?url=' + encodeURIComponent(src); }
-              else { this.style.display = 'none'; }
-            };
+            img.onerror = function () { if (!retried) { retried = true; this.src = window.location.origin + '/api/image?url=' + encodeURIComponent(src); } else { this.style.display = 'none'; } };
             img.onload = function () { this.classList.add('loaded'); };
             img.src = src;
             imgContainer.appendChild(img);
@@ -476,47 +564,177 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // Keyboard navigation
     document.addEventListener('keydown', e => {
       if ($('reader-section').classList.contains('hidden')) return;
-      if (e.key === 'ArrowLeft') { const btn = $('reader-prev-btn'); if (!btn.classList.contains('hidden')) btn.click(); }
-      if (e.key === 'ArrowRight') { const btn = $('reader-next-btn'); if (!btn.classList.contains('hidden')) btn.click(); }
+      if (e.key === 'ArrowLeft') { const b = $('reader-prev-btn'); if (!b.classList.contains('hidden')) b.click(); }
+      if (e.key === 'ArrowRight') { const b = $('reader-next-btn'); if (!b.classList.contains('hidden')) b.click(); }
     });
 
     function extractChapterImages(html) {
       const doc = new DOMParser().parseFromString(html, 'text/html');
-      const selectors = [
-        '.reading-content img.wp-manga-chapter-img', '.reading-content img',
-        '.chapter-content img', '.entry-content img', '.page-content img',
-        '#chapter-content img', '.chapter-page img', '.text-left img',
-        '.comic-page img', '#reader img', '.chapter-images img',
-        '.wp-manga-chapter-img', '.chapter-inner img',
-        'img.lazyload-ordered', 'img.wp-manga-chapter-img'
-      ];
-
-      for (const sel of selectors) {
-        const imgs = [...doc.querySelectorAll(sel)].map(getImgSrc).filter(s => s && isContentImg(s) && s.startsWith('http'));
-        if (imgs.length > 2) return imgs;
-      }
-
-      // Best container
+      const selectors = ['.reading-content img.wp-manga-chapter-img','.reading-content img','.chapter-content img','.entry-content img','.page-content img','#chapter-content img','.chapter-page img','.text-left img','.comic-page img','#reader img','.chapter-images img','.wp-manga-chapter-img','.chapter-inner img','img.lazyload-ordered','img.wp-manga-chapter-img'];
+      for (const sel of selectors) { const imgs = [...doc.querySelectorAll(sel)].map(getImgSrc).filter(s => s && isContentImg(s) && s.startsWith('http')); if (imgs.length > 2) return imgs; }
       let best = null, bestCount = 0;
       doc.querySelectorAll('div, section, main, article').forEach(el => {
-        const count = [...el.querySelectorAll('img')].filter(img => { const s = getImgSrc(img); return s && isContentImg(s) && s.startsWith('http'); }).length;
-        if (count > bestCount) { bestCount = count; best = el; }
+        const cnt = [...el.querySelectorAll('img')].filter(img => { const s = getImgSrc(img); return s && isContentImg(s) && s.startsWith('http'); }).length;
+        if (cnt > bestCount) { bestCount = cnt; best = el; }
       });
       if (best && bestCount > 0) return [...best.querySelectorAll('img')].map(getImgSrc).filter(s => s && isContentImg(s) && s.startsWith('http'));
-
-      // All images
       const all = [...doc.querySelectorAll('img')].map(getImgSrc).filter(s => s && isContentImg(s) && s.startsWith('http'));
       if (all.length > 0) return all;
-
-      // Regex fallback
       const re = /https?:\/\/[^\s"'<>()]+\.(?:jpg|jpeg|png|webp|avif|gif)(?:\?[^\s"'<>()]*)?/gi;
-      const matches = html.match(re);
-      return matches ? [...new Set(matches)].filter(isContentImg) : [];
+      const m = html.match(re);
+      return m ? [...new Set(m)].filter(isContentImg) : [];
     }
 
+    // ---- Local Save ----
+    async function fetchImageAsBlob(url, referer) {
+      const proxyUrl = window.location.origin + '/api/image?url=' + encodeURIComponent(url);
+      const res = await fetch(proxyUrl);
+      if (!res.ok) throw new Error('Fetch failed');
+      return await res.blob();
+    }
+
+    async function saveChapterImages(chapterUrl, chapterTitle, mangaUrl, images, referer) {
+      showLoading('Görseller kaydediliyor...');
+      const imgData = [];
+      let totalSize = 0;
+      for (let i = 0; i < images.length; i++) {
+        $('loading-text').textContent = `Görsel ${i + 1}/${images.length} kaydediliyor...`;
+        setProgress(((i + 1) / images.length) * 100);
+        try {
+          const blob = await fetchImageAsBlob(images[i], referer);
+          imgData.push({ url: images[i], data: blob });
+          totalSize += blob.size;
+        } catch (_) {
+          imgData.push({ url: images[i], data: null });
+        }
+      }
+      await DB.saveChapter({ chapterUrl, chapterTitle, mangaUrl, images: imgData, size: totalSize, downloadedAt: new Date().toISOString() });
+      // Update manga record
+      await DB.saveManga({ mangaUrl, title: currentMangaTitle, coverUrl: currentCoverUrl });
+      hideLoading();
+      setProgress(0);
+      return imgData.length;
+    }
+
+    async function saveCurrentChapter() {
+      if (currentChapterImages.length === 0) { toast('Önce bölümü açın.', 'error'); return; }
+      const title = $('reader-chapter-title').textContent || 'Bölüm';
+      const count = await saveChapterImages(currentChapterUrl, title, currentMangaUrl, currentChapterImages, currentChapterReferer);
+      toast(count + ' görsel cihaza kaydedildi!', 'success');
+    }
+
+    async function saveMangaLocal() {
+      if (chaptersList.length === 0) { toast('Bölüm listesi bulunamadı.', 'error'); return; }
+      const chapters = [...chaptersList];
+      let totalSuccess = 0, totalFailed = 0;
+      showLoading('Cihaza kaydediliyor... 0/' + chapters.length);
+
+      // Save manga metadata first
+      await DB.saveManga({ mangaUrl: currentMangaUrl, title: currentMangaTitle, coverUrl: currentCoverUrl });
+
+      for (let i = 0; i < chapters.length; i++) {
+        const ch = chapters[i];
+        try {
+          // Check if already saved
+          const existing = await DB.getChapter(ch.href);
+          if (existing?.images?.length > 0) { totalSuccess += existing.images.length; continue; }
+
+          $('loading-text').textContent = `Bölüm ${i + 1}/${chapters.length} taranıyor...`;
+          setProgress(((i) / chapters.length) * 100);
+          const res = await fetch(TUNNEL_URL + encodeURIComponent(ch.href));
+          const html = await res.text();
+          const images = extractChapterImages(html);
+          if (images.length === 0) { totalFailed++; continue; }
+
+          // Save with blobs
+          const imgData = [];
+          for (let j = 0; j < images.length; j++) {
+            $('loading-text').textContent = `Bölüm ${i + 1}/${chapters.length} - Görsel ${j + 1}/${images.length}`;
+            try {
+              const blob = await fetchImageAsBlob(images[j], ch.href);
+              imgData.push({ url: images[j], data: blob });
+              totalSuccess++;
+            } catch (_) { imgData.push({ url: images[j], data: null }); totalFailed++; }
+          }
+          const totalSize = imgData.reduce((s, d) => s + (d.data?.size || 0), 0);
+          await DB.saveChapter({ chapterUrl: ch.href, chapterTitle: ch.title, mangaUrl: currentMangaUrl, images: imgData, size: totalSize });
+        } catch (e) { totalFailed++; }
+      }
+      hideLoading();
+      setProgress(0);
+      toast(`${totalSuccess} görsel kaydedildi${totalFailed > 0 ? `, ${totalFailed} hatalı` : ''}`, totalFailed > totalSuccess ? 'error' : 'success');
+    }
+
+    // ---- Downloads Section ----
+    async function openDownloads() {
+      showSection('downloads');
+      showLoading('İndirilenler yükleniyor...');
+      const grid = $('downloads-grid');
+      grid.innerHTML = '';
+      const mangaList = await DB.getAllManga();
+      const totalSize = await DB.getTotalSize();
+      $('storage-info').textContent = mangaList.length + ' manga · ' + formatSize(totalSize);
+
+      if (mangaList.length === 0) {
+        grid.innerHTML = '<div class="col-span-full text-center py-16 text-zinc-600"><div class="text-5xl mb-4">📥</div><p class="text-lg">Henüz indirilen yok</p><p class="text-sm mt-1">Bir manga detayından "Cihaza Kaydet" ile ekleyin.</p></div>';
+        hideLoading();
+        return;
+      }
+
+      mangaList.sort((a, b) => new Date(b.downloadedAt) - new Date(a.downloadedAt));
+      for (const m of mangaList) {
+        const chapters = await DB.getChaptersByManga(m.mangaUrl);
+        const totalImgs = chapters.reduce((s, c) => s + c.images?.length || 0, 0);
+        const size = chapters.reduce((s, c) => s + (c.size || 0), 0);
+        const div = document.createElement('div');
+        div.className = 'card cursor-pointer';
+        div.innerHTML = `
+          <img src="${m.coverUrl || ''}" class="w-full manga-cover" loading="lazy" onerror="this.parentElement.querySelector('.cover-fallback').style.display='flex'">
+          <div class="cover-fallback" style="display:none; aspect-ratio:3/4; align-items:center; justify-content:center; background:#1a1a2e;"><span class="text-3xl opacity-30">&#x1F4D6;</span></div>
+          <div class="p-2.5">
+            <h3 class="text-xs font-medium truncate">${m.title || 'Adsız'}</h3>
+            <div class="flex gap-1 mt-1.5 flex-wrap">
+              <span class="badge-purple">${chapters.length} bölüm</span>
+              <span class="badge-size">${formatSize(size)}</span>
+            </div>
+          </div>`;
+        div.onclick = () => openLocalManga(m.mangaUrl);
+        grid.appendChild(div);
+      }
+      hideLoading();
+    }
+
+    async function openLocalManga(mangaUrl) {
+      showSection('local-detail');
+      showLoading('Yükleniyor...');
+      const m = await DB.getManga(mangaUrl);
+      const chapters = await DB.getChaptersByManga(mangaUrl);
+      $('local-detail-cover').src = m?.coverUrl || '';
+      $('local-detail-title').textContent = m?.title || 'Adsız';
+      $('local-detail-info').textContent = chapters.length + ' bölüm · ' + formatSize(chapters.reduce((s, c) => s + (c.size || 0), 0));
+      $('local-detail-delete').onclick = async () => {
+        if (!confirm('Bu mangayı cihazdan kaldırmak istediğinize emin misiniz?')) return;
+        await DB.deleteManga(mangaUrl);
+        toast('Kaldırıldı.', 'info');
+        openDownloads();
+      };
+      const chDiv = $('local-detail-chapters');
+      chDiv.innerHTML = '';
+      chaptersList = chapters.map(c => ({ href: c.chapterUrl, title: c.chapterTitle }));
+      chapters.forEach(c => {
+        const btn = document.createElement('button');
+        btn.className = 'chapter-btn';
+        const imgCount = c.images?.filter(i => i.data).length || 0;
+        btn.textContent = c.chapterTitle + ` (${imgCount} resim)`;
+        btn.onclick = () => openChapter(mangaUrl, c.chapterUrl, c.chapterTitle, true);
+        chDiv.appendChild(btn);
+      });
+      hideLoading();
+    }
+
+    // ---- Download CBZ (unchanged) ----
     function downloadCurrentChapter() {
       if (currentChapterImages.length === 0) { toast('Önce bölümü açın.', 'error'); return; }
       const manga = decodeURIComponent(currentMangaUrl.split('/').filter(Boolean).pop() || '');
@@ -525,11 +743,10 @@
       const images = currentChapterImages.map(url => ({ url, referer: currentChapterReferer }));
       showLoading('CBZ hazırlanıyor...');
       fetch('/api/download-images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ images, filename })
       }).then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.error || 'Hata'); }); return r.blob(); })
-        .then(blob => { hideLoading(); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename + '.cbz'; a.click(); URL.revokeObjectURL(a.href); toast('İndirme tamam!', 'success'); })
+        .then(blob => { hideLoading(); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename + '.cbz'; a.click(); URL.revokeObjectURL(a.href); toast('CBZ indirme tamam!', 'success'); })
         .catch(e => { hideLoading(); toast('Hata: ' + e.message, 'error'); });
     }
 
@@ -537,13 +754,10 @@
       if (chaptersList.length === 0) { toast('Bölüm listesi bulunamadı.', 'error'); return; }
       const name = decodeURIComponent(currentMangaUrl.split('/').filter(Boolean).pop() || 'manga');
       const chapters = [...chaptersList].reverse();
-      const allImages = [];
-      let failed = 0;
-
+      const allImages = []; let failed = 0;
       showLoading('Tüm bölümler taranıyor... 0/' + chapters.length);
-
       for (let i = 0; i < chapters.length; i++) {
-        $('loading-text').textContent = `Tüm bölümler taranıyor... ${i + 1}/${chapters.length}${failed > 0 ? ` (${failed} hatalı)` : ''}`;
+        $('loading-text').textContent = `Taranıyor... ${i + 1}/${chapters.length}${failed > 0 ? ` (${failed} hatalı)` : ''}`;
         try {
           const res = await fetch(TUNNEL_URL + encodeURIComponent(chapters[i].href));
           const html = await res.text();
@@ -552,46 +766,27 @@
           images.forEach(url => allImages.push({ url, referer: chapters[i].href }));
         } catch (e) { failed++; }
       }
-
       if (allImages.length === 0) { hideLoading(); toast('Hiç resim bulunamadı.', 'error'); return; }
-
-      $('loading-text').textContent = 'CBZ arşivi oluşturuluyor... (' + allImages.length + ' resim)';
+      $('loading-text').textContent = 'CBZ oluşturuluyor... (' + allImages.length + ' resim)';
       const filename = name.replace(/[^\w\- ]/g, '').trim() + ' - All Chapters';
-
       try {
-        const r = await fetch('/api/download-images', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ images: allImages, filename })
-        });
+        const r = await fetch('/api/download-images', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ images: allImages, filename }) });
         if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Hata'); }
         const blob = await r.blob();
-        hideLoading();
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename + '.cbz'; a.click(); URL.revokeObjectURL(a.href);
-        toast('İndirme tamam! ' + (failed > 0 ? `(${failed} bölüm atlandı)` : ''), 'success');
+        hideLoading(); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename + '.cbz'; a.click(); URL.revokeObjectURL(a.href);
+        toast('CBZ tamam! ' + (failed > 0 ? `(${failed} bölüm atlandı)` : ''), 'success');
       } catch (e) { hideLoading(); toast('Hata: ' + e.message, 'error'); }
     }
 
-    // PWA Install
+    // ---- PWA ----
     let deferredPrompt = null;
     const installBtn = $('install-btn');
     window.addEventListener('beforeinstallprompt', e => {
-      e.preventDefault();
-      deferredPrompt = e;
-      installBtn.classList.remove('hidden');
-      installBtn.onclick = async () => {
-        installBtn.classList.add('hidden');
-        deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-        deferredPrompt = null;
-      };
+      e.preventDefault(); deferredPrompt = e; installBtn.classList.remove('hidden');
+      installBtn.onclick = async () => { installBtn.classList.add('hidden'); deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; };
     });
     window.addEventListener('appinstalled', () => { deferredPrompt = null; installBtn.classList.add('hidden'); });
-
-    // Service Worker
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
-    }
+    if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
   </script>
 </body>
 </html>
