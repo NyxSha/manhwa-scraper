@@ -162,7 +162,6 @@
         }
 
         function navigateTo(url) {
-            url = fixUrl(url);
             document.getElementById('nav-url').value = url;
             loadLatest(url);
         }
@@ -171,13 +170,14 @@
             let url;
             if (encodedPageUrl) {
                 try {
-                    url = fixUrl(safeDecode(encodedPageUrl));
+                    url = safeDecode(encodedPageUrl);
                 } catch(e) {
-                    url = fixUrl(encodedPageUrl);
+                    url = encodedPageUrl;
                 }
             } else {
-                url = fixUrl(document.getElementById('target-site').value);
+                url = document.getElementById('target-site').value;
             }
+            url = fixUrl(url);
             currentPageUrl = url;
             currentSiteUrl = new URL(url).origin;
             document.getElementById('nav-url').value = url;
