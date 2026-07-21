@@ -5,6 +5,8 @@ const path = require('path');
 const session = require('express-session');
 const archiver = require('archiver');
 
+const PORT = process.env.PORT || 3000;
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -104,115 +106,110 @@ app.get('/api/tunnel', async (req, res) => {
     }
 });
 
+// Fetch chapters from a manga URL (reusable function)
+async function fetchChapters(url) {
+    const pageRes = await tunnelAxios.get(url, {
+        headers: getHeaders(url),
+        responseType: 'text'
+    });
+
+    const html = pageRes.data;
+    const mangaIdMatch = html.match(/manga_id["']?\s*:\s*["']?(\d+)/);
+    const ajaxUrlMatch = html.match(/ajax_url["']?\s*:\s*["']([^"']+)/);
+
+    if (!mangaIdMatch) {
+        const chapterRegex = /<a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/gi;
+        const chapters = [];
+        let m;
+        while ((m = chapterRegex.exec(html)) !== null) {
+            const href = m[1];
+            const text = m[2].trim();
+            if ((text.toLowerCase().includes('chapter') || text.match(/ch\.?\s*\d+/i) || text === 'Oneshot' || text === 'One-shot') && href) {
+                chapters.push({ href, title: text });
+            }
+        }
+        return { chapters, mangaId: null, ajaxUrl: null };
+    }
+
+    const mangaId = mangaIdMatch[1];
+    const ajaxUrl = ajaxUrlMatch ? ajaxUrlMatch[1] : `https://${new URL(url).host}/wp-admin/admin-ajax.php`;
+
+    const fallbackLinks = [];
+    const btnRegex = /<a[^>]+(?:id=["'](?:btn-read-first|btn-read-last)["']|class=["'][^"']*c-btn[^"']*["'])[^>]*href=["']([^"']+)[^>]*>/gi;
+    let btnMatch;
+    while ((btnMatch = btnRegex.exec(html)) !== null) {
+        fallbackLinks.push({ href: btnMatch[1], title: 'Bölüm' });
+    }
+
+    const allLinksRegex = /<a[^>]*href=["']([^"']*(?:chapter|bolum|bölüm|oneshot|ch\.\d+|read|vol\.)[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    let linkMatch;
+    while ((linkMatch = allLinksRegex.exec(html)) !== null) {
+        const title = linkMatch[2].replace(/<[^>]+>/g, '').trim();
+        if (title && !fallbackLinks.some(l => l.href === linkMatch[1])) {
+            fallbackLinks.push({ href: linkMatch[1], title });
+        }
+    }
+
+    if (fallbackLinks.length > 0) {
+        return { chapters: fallbackLinks, source: 'fallback', mangaId, ajaxUrl };
+    }
+
+    const actions = [
+        'wp_manga_get_chapters', 'manga_get_chapters',
+        'manga-chapters-load', 'manga_load_chapters',
+        'wp-manga-get-chapters', 'madara_get_chapters',
+        'wp-manga-chapters', 'manga-chapters'
+    ];
+
+    for (const action of actions) {
+        try {
+            const body = new URLSearchParams();
+            body.append('action', action);
+            body.append('manga_id', mangaId);
+
+            const ajaxRes = await tunnelAxios.post(ajaxUrl, body.toString(), {
+                headers: {
+                    ...getHeaders(ajaxUrl, '*/*'),
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                responseType: 'text'
+            });
+
+            const data = ajaxRes.data;
+            if (data && data !== '0' && data !== '-1' && data.length > 10) {
+                const chapterRegex = /<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+                const chapters = [];
+                let m;
+                while ((m = chapterRegex.exec(data)) !== null) {
+                    const href = m[1];
+                    const title = m[2].replace(/<[^>]+>/g, '').trim();
+                    if (href && title && (title.toLowerCase().includes('chapter') || title.match(/ch\.?\s*\d+/i) || data.includes('wp-manga-chapter') || href.includes('/manga/'))) {
+                        chapters.push({ href, title });
+                    }
+                }
+                if (chapters.length > 0) {
+                    return { chapters, action, mangaId, ajaxUrl };
+                }
+                return { chapters: [], raw: data.substring(0, 1000), action, mangaId, ajaxUrl };
+            }
+        } catch (e) { }
+    }
+
+    return { chapters: [], mangaId, ajaxUrl };
+}
+
 // Get chapters from Madara-based manga sites via admin-ajax.php
 app.get('/api/chapters', async (req, res) => {
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL parametresi zorunludur.' });
 
     try {
-        // Fetch the manga detail page
-        const pageRes = await tunnelAxios.get(url, {
-            headers: getHeaders(url),
-            responseType: 'text'
-        });
-
-        const html = pageRes.data;
-
-        // Extract manga_id from JS variable
-        const mangaIdMatch = html.match(/manga_id["']?\s*:\s*["']?(\d+)/);
-        const ajaxUrlMatch = html.match(/ajax_url["']?\s*:\s*["']([^"']+)/);
-        
-        if (!mangaIdMatch) {
-            // Fallback: try to extract chapter links directly from page
-            const chapterRegex = /<a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/gi;
-            const chapters = [];
-            let m;
-            while ((m = chapterRegex.exec(html)) !== null) {
-                const href = m[1];
-                const text = m[2].trim();
-                if ((text.toLowerCase().includes('chapter') || text.match(/ch\.?\s*\d+/i) || text === 'Oneshot' || text === 'One-shot') && href) {
-                    chapters.push({ href, title: text });
-                }
-            }
-            if (chapters.length > 0) {
-                return res.json({ chapters });
-            }
-            return res.status(404).json({ error: 'Manga ID bulunamadı.', chapters: [] });
+        const result = await fetchChapters(url);
+        if (result.chapters.length === 0) {
+            return res.status(404).json({ error: 'Bölüm bulunamadı.', ...result });
         }
-
-        const mangaId = mangaIdMatch[1];
-        const ajaxUrl = ajaxUrlMatch ? ajaxUrlMatch[1] : `https://${new URL(url).host}/wp-admin/admin-ajax.php`;
-
-        // Fallback: extract chapter links directly from page (btn-read, etc.)
-        const fallbackLinks = [];
-        const btnRegex = /<a[^>]+(?:id=["'](?:btn-read-first|btn-read-last)["']|class=["'][^"']*c-btn[^"']*["'])[^>]*href=["']([^"']+)[^>]*>/gi;
-        let btnMatch;
-        while ((btnMatch = btnRegex.exec(html)) !== null) {
-            fallbackLinks.push({ href: btnMatch[1], title: 'Bölüm' });
-        }
-        
-        // Also look for any links containing chapter-like text in the manga detail page
-        const allLinksRegex = /<a[^>]*href=["']([^"']*(?:chapter|bolum|bölüm|oneshot|ch\.\d+|read|vol\.)[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
-        let linkMatch;
-        while ((linkMatch = allLinksRegex.exec(html)) !== null) {
-            const title = linkMatch[2].replace(/<[^>]+>/g, '').trim();
-            if (title && !fallbackLinks.some(l => l.href === linkMatch[1])) {
-                fallbackLinks.push({ href: linkMatch[1], title });
-            }
-        }
-        
-        if (fallbackLinks.length > 0) {
-            return res.json({ chapters: fallbackLinks, source: 'fallback' });
-        }
-
-        // Try different action names
-        const actions = [
-            'wp_manga_get_chapters', 'manga_get_chapters', 
-            'manga-chapters-load', 'manga_load_chapters',
-            'wp-manga-get-chapters', 'madara_get_chapters',
-            'wp-manga-chapters', 'manga-chapters'
-        ];
-
-        for (const action of actions) {
-            try {
-                const body = new URLSearchParams();
-                body.append('action', action);
-                body.append('manga_id', mangaId);
-
-                const ajaxRes = await tunnelAxios.post(ajaxUrl, body.toString(), {
-                    headers: {
-                        ...getHeaders(ajaxUrl, '*/*'),
-                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    responseType: 'text'
-                });
-
-                const data = ajaxRes.data;
-                if (data && data !== '0' && data !== '-1' && data.length > 10) {
-                    // Parse the returned HTML for chapter links
-                    const chapterRegex = /<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-                    const chapters = [];
-                    let m;
-                    while ((m = chapterRegex.exec(data)) !== null) {
-                        const href = m[1];
-                        const title = m[2].replace(/<[^>]+>/g, '').trim();
-                        if (href && title && (title.toLowerCase().includes('chapter') || title.match(/ch\.?\s*\d+/i) || data.includes('wp-manga-chapter') || href.includes('/manga/'))) {
-                            chapters.push({ href, title });
-                        }
-                    }
-                    if (chapters.length > 0) {
-                        return res.json({ chapters, action });
-                    }
-                    // Return raw HTML if no links found but response exists
-                    return res.json({ chapters: [], raw: data.substring(0, 1000), action });
-                }
-            } catch (e) {
-                // Try next action
-            }
-        }
-
-        res.status(404).json({ error: 'Hiçbir AJAX eylemi çalışmadı.', mangaId, ajaxUrl });
+        res.json(result);
     } catch (error) {
         console.error(`[Bölüm Hatası] URL: ${url} -> ${error.message}`);
         res.status(502).json({ error: 'Bölümler yüklenemedi.', detail: error.message });
@@ -247,42 +244,48 @@ app.get('/api/download', async (req, res) => {
     try {
         if (type === 'manga') {
             // Download all chapters of a manga
-            const chaptersRes = await tunnelAxios.get(`http://localhost:${PORT}/api/chapters`, {
-                params: { url },
-                responseType: 'json'
-            });
-            const chapters = chaptersRes.data.chapters || [];
+            const result = await fetchChapters(url);
+            const chapters = result.chapters || [];
             if (chapters.length === 0) return res.status(404).json({ error: 'Bölüm bulunamadı.' });
 
-            const mangaName = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'manga');
+            const mangaName = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'manga').replace(/[^\w\-]/g, '_');
             res.setHeader('Content-Type', 'application/zip');
             res.setHeader('Content-Disposition', `attachment; filename="${mangaName}.cbz"`);
 
-            const archive = archiver('zip', { gzip: false });
+            const archive = archiver('zip', { gzip: false, highWaterMark: 1024 * 1024 });
+            archive.on('error', err => {
+                console.error(`[CBZ Hatası] ${err.message}`);
+                if (!res.headersSent) res.status(500).json({ error: 'CBZ oluşturulamadı.' });
+            });
             archive.pipe(res);
 
             for (let i = 0; i < chapters.length; i++) {
                 const ch = chapters[i];
                 try {
-                    const pageRes = await tunnelAxios.get(ch.href, {
-                        headers: getHeaders(ch.href),
+                    const chUrl = ch.href.startsWith('http') ? ch.href : new URL(ch.href, url).href;
+                    const pageRes = await tunnelAxios.get(chUrl, {
+                        headers: getHeaders(chUrl),
                         responseType: 'text',
                         timeout: 15000
                     });
                     const images = extractImagesFromHtml(pageRes.data);
                     for (let j = 0; j < images.length; j++) {
                         try {
-                            const imgRes = await tunnelAxios.get(images[j], {
-                                headers: getHeaders(images[j], 'image/*'),
+                            const imgUrl = images[j].startsWith('http') ? images[j] : new URL(images[j], chUrl).href;
+                            const imgRes = await tunnelAxios.get(imgUrl, {
+                                headers: getHeaders(imgUrl, 'image/*'),
                                 responseType: 'arraybuffer',
                                 timeout: 15000
                             });
-                            const ext = images[j].match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
+                            const ext = imgUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
                             const chName = (ch.title || `chapter-${i + 1}`).replace(/[^\w]/g, '_');
-                            archive.append(Buffer.from(imgRes.data), { name: `${chName}/page-${j + 1}.${ext}` });
+                            archive.append(Buffer.from(imgRes.data), { name: `${chName}/page-${String(j + 1).padStart(3, '0')}.${ext}` });
                         } catch (e) { /* skip failed image */ }
                     }
-                } catch (e) { /* skip failed chapter */ }
+                    console.log(`[CBZ] ${ch.title}: ${images.length} resim işlendi`);
+                } catch (e) {
+                    console.error(`[CBZ Bölüm Hatası] ${ch.title}: ${e.message}`);
+                }
             }
             archive.finalize();
         } else {
@@ -295,39 +298,75 @@ app.get('/api/download', async (req, res) => {
             const images = extractImagesFromHtml(pageRes.data);
             if (images.length === 0) return res.status(404).json({ error: 'Resim bulunamadı.' });
 
-            const chapterName = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'chapter');
+            const chapterName = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'chapter').replace(/[^\w\-]/g, '_');
             res.setHeader('Content-Type', 'application/zip');
             res.setHeader('Content-Disposition', `attachment; filename="${chapterName}.cbz"`);
 
-            const archive = archiver('zip', { gzip: false });
+            const archive = archiver('zip', { gzip: false, highWaterMark: 1024 * 1024 });
+            archive.on('error', err => {
+                console.error(`[CBZ Hatası] ${err.message}`);
+                if (!res.headersSent) res.status(500).json({ error: 'CBZ oluşturulamadı.' });
+            });
             archive.pipe(res);
+
+            console.log(`[CBZ] ${chapterName}: ${images.length} resim bulundu`);
 
             for (let i = 0; i < images.length; i++) {
                 try {
-                    const imgRes = await tunnelAxios.get(images[i], {
-                        headers: getHeaders(images[i], 'image/*'),
+                    const imgUrl = images[i].startsWith('http') ? images[i] : new URL(images[i], url).href;
+                    const imgRes = await tunnelAxios.get(imgUrl, {
+                        headers: getHeaders(imgUrl, 'image/*'),
                         responseType: 'arraybuffer',
                         timeout: 15000
                     });
-                    const ext = images[i].match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
-                    archive.append(Buffer.from(imgRes.data), { name: `page-${i + 1}.${ext}` });
+                    const ext = imgUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
+                    archive.append(Buffer.from(imgRes.data), { name: `page-${String(i + 1).padStart(3, '0')}.${ext}` });
                 } catch (e) { /* skip */ }
             }
             archive.finalize();
         }
     } catch (error) {
         console.error(`[İndirme Hatası] ${url} -> ${error.message}`);
-        res.status(502).json({ error: 'İndirme başarısız.', detail: error.message });
+        if (!res.headersSent) {
+            res.status(502).json({ error: 'İndirme başarısız.', detail: error.message });
+        }
     }
 });
 
 function extractImagesFromHtml(html) {
+    const urls = new Set();
+
+    // Extract from data-src, data-lazy-src, data-original, srcset, src attributes
+    const attrPatterns = [
+        /data-src=["']([^"']+)/gi,
+        /data-lazy-src=["']([^"']+)/gi,
+        /data-original=["']([^"']+)/gi,
+        /data-srcset=["']([^"'\s,]+)/gi,
+        /src=["'](https?:\/\/[^"']+)/gi
+    ];
+    for (const regex of attrPatterns) {
+        let m;
+        while ((m = regex.exec(html)) !== null) {
+            const url = m[1].trim();
+            if (/\.(jpg|jpeg|png|webp|avif|gif)(\?|$)/i.test(url)) {
+                urls.add(url);
+            }
+        }
+    }
+
+    // Regex fallback for bare URLs in text
     const imgRegex = /https?:\/\/[^\s"'<>()]+\.(?:jpg|jpeg|png|webp|avif|gif)(?:\?[^\s"'<>()]*)?/gi;
-    const matches = html.match(imgRegex);
-    if (!matches) return [];
-    return [...new Set(matches)].filter(u => {
+    let m;
+    while ((m = imgRegex.exec(html)) !== null) {
+        urls.add(m[0]);
+    }
+
+    return [...urls].filter(u => {
         const low = u.toLowerCase();
-        return !low.includes('logo') && !low.includes('avatar') && !low.includes('icon') && !low.includes('banner') && !low.includes('sponsor') && !low.includes('thumb') && !low.includes('button');
+        return !low.includes('logo') && !low.includes('avatar') && !low.includes('icon')
+            && !low.includes('banner') && !low.includes('sponsor') && !low.includes('thumb')
+            && !low.includes('button') && !low.includes('advert') && !low.includes('emoji')
+            && !low.includes('social') && !low.includes('gravatar');
     });
 }
 
@@ -340,5 +379,4 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Evrensel Tünel Sunucusu Aktif: ${PORT}`));
