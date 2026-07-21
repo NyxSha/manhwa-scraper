@@ -329,14 +329,17 @@ async function buildCbz(chapters, baseUrl, fileName) {
 
 // Download single chapter as CBZ
 app.get('/api/download', async (req, res) => {
-    const { url } = req.query;
+    const { url, manga, title } = req.query;
     if (!url) return res.status(400).json({ error: 'URL parametresi zorunludur.' });
 
     try {
-        console.log(`[İndirme] Tek bölüm: ${url}`);
-        const fileName = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'chapter').replace(/[^\w\-]/g, '_');
-        const buf = await buildCbz([{ href: url, title: 'Bölüm' }], url, fileName);
-        console.log(`[İndirme] Tamamlandı: ${fileName}.cbz (${(buf.length / 1024 / 1024).toFixed(1)} MB)`);
+        console.log(`[İndirme] Bölüm: ${url}`);
+        const mangaName = manga ? decodeURIComponent(manga).replace(/[^\w\- ]/g, '').trim() : '';
+        const chapterTitle = title ? decodeURIComponent(title).replace(/[^\w\- ]/g, '').trim() : '';
+        const fileName = [mangaName, chapterTitle].filter(Boolean).join(' - ').replace(/\s+/g, ' ').trim()
+            || decodeURIComponent(url.split('/').filter(Boolean).pop() || 'chapter').replace(/[^\w\-]/g, '_');
+        const buf = await buildCbz([{ href: url, title: chapterTitle || 'Bölüm' }], url, fileName);
+        console.log(`[İndirme] Tamam: ${fileName}.cbz (${(buf.length / 1024 / 1024).toFixed(1)} MB)`);
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}.cbz"`);
         res.setHeader('Content-Length', buf.length);
@@ -367,11 +370,12 @@ app.get('/api/download-all', async (req, res) => {
     }
 
     try {
-        const fileName = (data.name || 'manga').replace(/[^\w\-]/g, '_');
+        let fileName = (data.name || 'manga').replace(/[^\w\- ]/g, '').trim();
+        fileName += ' - All Chapters';
         console.log(`[İndirme] Toplu: ${fileName}, ${data.chapters.length} bölüm`);
         const buf = await buildCbz(data.chapters, data.baseUrl || data.chapters[0].href, fileName);
         delete req.session.downloadData;
-        console.log(`[İndirme] Tamamlandı: ${fileName}.cbz (${(buf.length / 1024 / 1024).toFixed(1)} MB)`);
+        console.log(`[İndirme] Tamam: ${fileName}.cbz (${(buf.length / 1024 / 1024).toFixed(1)} MB)`);
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}.cbz"`);
         res.setHeader('Content-Length', buf.length);
@@ -389,38 +393,93 @@ app.get('/api/download-all', async (req, res) => {
 function extractImagesFromHtml(html) {
     const urls = new Set();
 
-    // Extract from data-src, data-lazy-src, data-original, srcset, src attributes
-    const attrPatterns = [
-        /data-src=["']([^"']+)/gi,
-        /data-lazy-src=["']([^"']+)/gi,
-        /data-original=["']([^"']+)/gi,
-        /data-srcset=["']([^"'\s,]+)/gi,
-        /src=["'](https?:\/\/[^"']+)/gi
+    // Strategy 1: Known content container selectors (regex-based)
+    const containerPatterns = [
+        /reading-content[^>]*>([\s\S]*?)(?:<\/div>\s*<div|<\/section>|<\/article>)/gi,
+        /chapter-content[^>]*>([\s\S]*?)(?:<\/div>\s*<div|<\/section>|<\/article>)/gi,
+        /entry-content[^>]*>([\s\S]*?)(?:<\/div>\s*<div|<\/section>|<\/article>)/gi,
+        /page-content[^>]*>([\s\S]*?)(?:<\/div>\s*<div|<\/section>|<\/article>)/gi,
+        /text-left[^>]*>([\s\S]*?)(?:<\/div>\s*<div|<\/section>|<\/article>)/gi,
+        /chapter-inner[^>]*>([\s\S]*?)(?:<\/div>\s*<div|<\/section>|<\/article>)/gi,
+        /chapter-images[^>]*>([\s\S]*?)(?:<\/div>\s*<div|<\/section>|<\/article>)/gi,
     ];
-    for (const regex of attrPatterns) {
+
+    for (const pattern of containerPatterns) {
         let m;
-        while ((m = regex.exec(html)) !== null) {
-            const url = m[1].trim();
-            if (/\.(jpg|jpeg|png|webp|avif|gif)(\?|$)/i.test(url)) {
-                urls.add(url);
+        while ((m = pattern.exec(html)) !== null) {
+            const content = m[1];
+            const imgPattern = /(?:data-src|src|data-lazy-src|data-original)=["']([^"']+\.(?:jpg|jpeg|png|webp|avif|gif)[^"']*)["']/gi;
+            let im;
+            while ((im = imgPattern.exec(content)) !== null) {
+                const url = im[1].split('?')[0];
+                if (isValidContentImage(url)) urls.add(url);
             }
+        }
+        if (urls.size > 2) break;
+    }
+
+    // Strategy 2: All images from the page with aggressive filtering
+    if (urls.size < 2) {
+        const attrPatterns = [
+            /data-src=["']([^"']+\.(?:jpg|jpeg|png|webp|avif|gif)[^"']*)/gi,
+            /data-lazy-src=["']([^"']+\.(?:jpg|jpeg|png|webp|avif|gif)[^"']*)/gi,
+            /data-original=["']([^"']+\.(?:jpg|jpeg|png|webp|avif|gif)[^"']*)/gi,
+            /src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp|avif|gif)[^"']*)/gi
+        ];
+        for (const regex of attrPatterns) {
+            let m;
+            while ((m = regex.exec(html)) !== null) {
+                const url = m[1].split('?')[0];
+                if (isValidContentImage(url)) urls.add(url);
+            }
+        }
+
+        const imgRegex = /https?:\/\/[^\s"'<>()]+\.(?:jpg|jpeg|png|webp|avif|gif)(?:\?[^\s"'<>()]*)?/gi;
+        let m;
+        while ((m = imgRegex.exec(html)) !== null) {
+            const url = m[0].split('?')[0];
+            if (isValidContentImage(url)) urls.add(url);
         }
     }
 
-    // Regex fallback for bare URLs in text
-    const imgRegex = /https?:\/\/[^\s"'<>()]+\.(?:jpg|jpeg|png|webp|avif|gif)(?:\?[^\s"'<>()]*)?/gi;
-    let m;
-    while ((m = imgRegex.exec(html)) !== null) {
-        urls.add(m[0]);
-    }
+    return [...urls];
+}
 
-    return [...urls].filter(u => {
-        const low = u.toLowerCase();
-        return !low.includes('logo') && !low.includes('avatar') && !low.includes('icon')
-            && !low.includes('banner') && !low.includes('sponsor') && !low.includes('thumb')
-            && !low.includes('button') && !low.includes('advert') && !low.includes('emoji')
-            && !low.includes('social') && !low.includes('gravatar');
-    });
+function isValidContentImage(url) {
+    const low = url.toLowerCase();
+    // Block UI, icons, ads, social, etc.
+    const blocked = [
+        'logo', 'avatar', 'icon', 'banner', 'sponsor', 'thumb', 'button',
+        'advert', 'ad-', '-ad', 'emoji', 'social', 'gravatar',
+        'twitter', 'facebook', 'instagram', 'discord', 'telegram', 'reddit',
+        'pinterest', 'tumblr', 'youtube', 'tiktok',
+        'menu', 'search', 'share', 'bookmark', 'heart', 'like', 'comment',
+        'eye', 'göz', 'clock', 'tarih', 'date', 'calendar', 'takvim',
+        'rating', 'star', 'vote', 'puan', 'yıldız',
+        'next', 'prev', 'prev', 'first', 'last', 'previous', 'sonraki', 'önceki',
+        'nav-', '-nav', 'navbar', 'navigation',
+        'loading', 'loader', 'spinner', 'ajax', 'lazy',
+        'bg-', 'background', 'pattern', 'dots', 'border',
+        'flag', 'bayrak', 'language', 'dil', 'translate', 'çeviri',
+        'rss', 'feed', 'widget', 'sidebar',
+        'author', 'user', 'profile', 'member', 'verified', 'badge',
+        'sprite', 'svg', 'blank', 'pixel', 'transparent',
+        'close', 'x-', 'cross', 'remove', 'delete', 'edit',
+        'down-arrow', 'up-arrow', 'chevron', 'dropdown',
+        'footer', 'header', 'top-', 'bottom',
+        'favicon', 'apple-touch', 'mstile',
+        'default-image', 'no-image', 'placeholder', 'dummy',
+        'captcha', 'recaptcha',
+        'adblock', 'popup', 'modal',
+        'responsive', 'mobile', 'desktop',
+        'soc-', 'follow',
+        'attachment-', 'wp-image-'
+    ];
+    for (const b of blocked) {
+        if (low.includes(b)) return false;
+    }
+    // Must have image extension
+    return /\.(jpg|jpeg|png|webp|avif|gif)$/i.test(low);
 }
 
 // Serve login.html without auth

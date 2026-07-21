@@ -421,7 +421,9 @@
 
         function downloadCurrentChapter() {
             if (_currentChapterUrl) {
-                triggerDownload(`/api/download?url=${encodeURIComponent(_currentChapterUrl)}`);
+                const manga = encodeURIComponent(decodeURIComponent(_currentMangaUrl.split('/').filter(Boolean).pop() || ''));
+                const title = encodeURIComponent(document.getElementById('reader-chapter-title').innerText || '');
+                triggerDownload(`/api/download?url=${encodeURIComponent(_currentChapterUrl)}&manga=${manga}&title=${title}`);
             }
         }
 
