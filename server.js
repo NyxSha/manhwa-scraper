@@ -238,17 +238,19 @@ app.get('/api/image', async (req, res) => {
 
 // Fetch an image with retry and proper referer
 async function fetchImageWithRetry(imgUrl, referer, retries = 2) {
+    const userAgents = [
+        CHROME_UA,
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+    ];
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
             const headers = getHeaders(imgUrl, 'image/avif,image/webp,image/apng,image/png,image/jpeg,image/gif,*/*;q=0.9', referer);
-            const userAgents = [
-                CHROME_UA,
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15'
-            ];
             if (attempt > 0) {
                 headers['User-Agent'] = userAgents[attempt % userAgents.length];
-                headers['Referer'] = attempt === 1 ? referer : referer + 'page/' + Math.floor(Math.random() * 100);
+                headers['Referer'] = attempt === 1 ? referer : referer.split('?')[0] + '?page=' + Math.floor(Math.random() * 1000);
+                headers['Origin'] = new URL(referer).origin;
             }
             const imgRes = await tunnelAxios.get(imgUrl, {
                 headers,
@@ -260,6 +262,7 @@ async function fetchImageWithRetry(imgUrl, referer, retries = 2) {
             if (attempt === retries) throw e;
         }
     }
+    throw new Error(`Image fetch failed after ${retries + 1} attempts`);
 }
 
 async function appendChapterToArchive(archive, chUrl, chTitle, baseUrl, chapterIndex) {
@@ -282,48 +285,61 @@ async function appendChapterToArchive(archive, chUrl, chTitle, baseUrl, chapterI
     return images.length;
 }
 
-// Download chapter as CBZ
+async function streamCbzArchive(res, chapters, baseUrl, fileName) {
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}.cbz"`);
+
+    const archive = archiver('zip', { gzip: false, highWaterMark: 1024 * 1024 });
+    archive.on('error', err => console.error(`[CBZ Hatası] ${err.message}`));
+    archive.pipe(res);
+
+    let totalImages = 0;
+    for (let i = 0; i < chapters.length; i++) {
+        try {
+            const count = await appendChapterToArchive(archive, chapters[i].href, chapters[i].title, baseUrl, i);
+            console.log(`[CBZ] ${chapters[i].title}: ${count} resim`);
+            totalImages += count;
+        } catch (e) {
+            console.error(`[CBZ Bölüm Hatası] ${chapters[i].title}: ${e.message}`);
+        }
+    }
+
+    if (totalImages === 0) {
+        archive.append('Hiçbir resim indirilemedi. Site koruma önlemleri uyguluyor olabilir.', { name: 'HATA.txt' });
+    }
+    archive.finalize();
+}
+
+// Download single chapter as CBZ (GET - supports streaming immediately)
 app.get('/api/download', async (req, res) => {
-    const { url, type } = req.query;
+    const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL parametresi zorunludur.' });
 
     try {
-        const chapters = type === 'manga'
-            ? (await fetchChapters(url)).chapters || []
-            : [{ href: url, title: 'Bölüm' }];
-
-        if (chapters.length === 0) {
-            const msg = type === 'manga' ? 'Bölüm bulunamadı.' : 'Resim bulunamadı.';
-            return res.status(404).json({ error: msg });
-        }
-
-        const nameBase = type === 'manga'
-            ? decodeURIComponent(url.split('/').filter(Boolean).pop() || 'manga')
-            : decodeURIComponent(url.split('/').filter(Boolean).pop() || 'chapter');
-        const fileName = nameBase.replace(/[^\w\-]/g, '_');
-
-        res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}.cbz"`);
-
-        const archive = archiver('zip', { gzip: false, highWaterMark: 1024 * 1024 });
-        archive.on('error', err => {
-            console.error(`[CBZ Hatası] ${err.message}`);
-            if (!res.headersSent) res.status(500).json({ error: 'CBZ oluşturulamadı.' });
-        });
-        archive.pipe(res);
-
-        for (let i = 0; i < chapters.length; i++) {
-            const ch = chapters[i];
-            try {
-                const count = await appendChapterToArchive(archive, ch.href, ch.title, url, i);
-                console.log(`[CBZ] ${ch.title}: ${count} resim`);
-            } catch (e) {
-                console.error(`[CBZ Bölüm Hatası] ${ch.title}: ${e.message}`);
-            }
-        }
-        archive.finalize();
+        const fileName = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'chapter').replace(/[^\w\-]/g, '_');
+        await streamCbzArchive(res, [{ href: url, title: 'Bölüm' }], url, fileName);
     } catch (error) {
         console.error(`[İndirme Hatası] ${url} -> ${error.message}`);
+        if (!res.headersSent) {
+            res.status(502).json({ error: 'İndirme başarısız.', detail: error.message });
+        }
+    }
+});
+
+// Download multiple chapters (POST - frontend sends chapter list already loaded in UI)
+// Body: { chapters: [{href, title}], name: 'mangaName', baseUrl: '...' }
+app.post('/api/download', async (req, res) => {
+    const { chapters, name, baseUrl } = req.body;
+    if (!chapters || !Array.isArray(chapters) || chapters.length === 0) {
+        return res.status(400).json({ error: 'Bölüm listesi zorunludur.' });
+    }
+
+    try {
+        const fileName = (name || 'manga').replace(/[^\w\-]/g, '_');
+        const urlBase = baseUrl || chapters[0].href;
+        await streamCbzArchive(res, chapters, urlBase, fileName);
+    } catch (error) {
+        console.error(`[Toplu İndirme Hatası] ${error.message}`);
         if (!res.headersSent) {
             res.status(502).json({ error: 'İndirme başarısız.', detail: error.message });
         }
