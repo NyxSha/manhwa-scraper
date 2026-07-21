@@ -35,15 +35,15 @@ const getHeaders = (targetUrl, accept = 'text/html,application/xhtml+xml,applica
     };
 };
 
-const ADMIN_USER = (process.env.ADMIN_USER || 'admin').trim();
-const ADMIN_PASS = (process.env.ADMIN_PASS || 'admin').trim();
+const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+const ADMIN_PASS = process.env.ADMIN_PASS || 'admin';
 
 // Auth middleware - check session for protected routes
 const requireAuth = (req, res, next) => {
     if (req.session && req.session.authenticated) {
         return next();
     }
-    if (req.path === '/login.html' || req.path.startsWith('/api/login') || req.path.startsWith('/api/check-auth')) {
+    if (req.path.startsWith('/api/login') || req.path === '/login.html') {
         return next();
     }
     if (req.path.startsWith('/api/')) {
