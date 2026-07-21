@@ -556,8 +556,12 @@ app.get('/favicon.ico', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'favicon.ico'));
 });
 
-app.get('/favicon.jpeg', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'favicon.jpeg'));
+app.get('/favicon.gif', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'favicon.gif'));
+});
+
+app.get('/manifest.json', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'manifest.json'));
 });
 
 app.get('*', (req, res) => {

@@ -1,0 +1,16 @@
+{
+  "name": "manhwafuta",
+  "short_name": "manhwafuta",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0c0e",
+  "theme_color": "#0c0c0e",
+  "icons": [
+    {
+      "src": "/favicon.gif",
+      "sizes": "any",
+      "type": "image/gif",
+      "purpose": "any maskable"
+    }
+  ]
+}
