@@ -4,16 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0a0a0f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/gif" href="/favicon.gif">
     <link rel="apple-touch-icon" href="/favicon.gif">
     <link rel="manifest" href="/manifest.json">
     <title>manhwafuta</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700;900&display=swap');
-        * { font-family: 'Kanit', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        * { font-family: 'Inter', sans-serif; }
         body {
-            background: #0a0a0b;
+            background: #0a0a0f;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -26,98 +29,74 @@
             content: '';
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: radial-gradient(ellipse at 50% 0%, rgba(120, 30, 180, 0.08) 0%, transparent 60%),
-                        radial-gradient(ellipse at 80% 50%, rgba(220, 40, 80, 0.05) 0%, transparent 50%),
-                        radial-gradient(ellipse at 20% 80%, rgba(180, 30, 120, 0.06) 0%, transparent 50%);
+            background: radial-gradient(ellipse at 50% 0%, rgba(168,85,247,0.08) 0%, transparent 60%),
+                        radial-gradient(ellipse at 80% 50%, rgba(236,72,153,0.05) 0%, transparent 50%),
+                        radial-gradient(ellipse at 20% 80%, rgba(168,85,247,0.06) 0%, transparent 50%);
             pointer-events: none;
             z-index: 0;
         }
         .login-card {
-            background: linear-gradient(145deg, rgba(18, 18, 22, 0.95), rgba(26, 26, 32, 0.95));
-            border: 1px solid rgba(180, 30, 120, 0.25);
-            border-radius: 24px;
-            padding: 48px 40px 40px;
-            width: 380px;
+            background: linear-gradient(145deg, rgba(18,18,28,0.95), rgba(24,24,38,0.95));
+            border: 1px solid rgba(168,85,247,0.2);
+            border-radius: 20px;
+            padding: 44px 36px 36px;
+            width: 360px;
             position: relative;
             z-index: 1;
-            box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 40px rgba(180, 30, 120, 0.05);
+            box-shadow: 0 25px 60px rgba(0,0,0,0.5), 0 0 40px rgba(168,85,247,0.05);
             backdrop-filter: blur(20px);
         }
         .login-card::before {
             content: '';
             position: absolute;
-            top: -1px; left: 30%; right: 30%;
+            top: -1px; left: 25%; right: 25%;
             height: 2px;
-            background: linear-gradient(90deg, transparent, #b41e78, #dc2850, #b41e78, transparent);
+            background: linear-gradient(90deg, transparent, #a855f7, #ec4899, #a855f7, transparent);
             border-radius: 50%;
         }
         .logo-icon {
-            font-size: 42px;
-            line-height: 1;
+            font-size: 40px;
             text-align: center;
             margin-bottom: 4px;
-            filter: drop-shadow(0 0 20px rgba(180, 30, 120, 0.3));
         }
         .glow-text {
-            background: linear-gradient(135deg, #e879d0, #dc2850);
+            background: linear-gradient(135deg, #a855f7, #ec4899);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            font-weight: 900;
+            font-weight: 800;
             font-size: 22px;
-            letter-spacing: 3px;
-            text-transform: uppercase;
+            letter-spacing: 2px;
         }
-        .subtitle {
-            color: rgba(255,255,255,0.3);
-            font-size: 11px;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            font-weight: 300;
-        }
+        .subtitle { color: rgba(255,255,255,0.25); font-size: 11px; letter-spacing: 3px; font-weight: 300; }
         .input-field {
             background: rgba(255,255,255,0.03);
             border: 1px solid rgba(255,255,255,0.06);
             border-radius: 12px;
-            padding: 14px 18px;
+            padding: 13px 16px;
             width: 100%;
-            color: #e4e4e7;
+            color: #e2e8f0;
             font-size: 14px;
             outline: none;
-            transition: all 0.25s ease;
+            transition: all 0.25s;
             box-sizing: border-box;
         }
-        .input-field:focus {
-            border-color: rgba(180, 30, 120, 0.4);
-            background: rgba(255,255,255,0.06);
-            box-shadow: 0 0 20px rgba(180, 30, 120, 0.05);
-        }
-        .input-field::placeholder { color: rgba(255,255,255,0.15); }
+        .input-field:focus { border-color: rgba(168,85,247,0.35); background: rgba(255,255,255,0.06); }
+        .input-field::placeholder { color: rgba(255,255,255,0.12); }
         .login-btn {
             width: 100%;
-            padding: 14px;
+            padding: 13px;
             border: none;
             border-radius: 12px;
             font-weight: 700;
-            font-size: 15px;
-            letter-spacing: 2px;
-            text-transform: uppercase;
+            font-size: 14px;
+            letter-spacing: 1.5px;
             cursor: pointer;
-            background: linear-gradient(135deg, #b41e78, #dc2850);
+            background: linear-gradient(135deg, #a855f7, #ec4899);
             color: white;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
+            transition: all 0.3s;
         }
-        .login-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(180, 30, 120, 0.3);
-        }
-        .login-btn:active { transform: translateY(0); }
-        .login-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
+        .login-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(168,85,247,0.25); }
+        .login-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
         .error-msg {
             color: #ef4444;
             font-size: 13px;
@@ -127,48 +106,23 @@
             transition: opacity 0.3s;
         }
         .error-msg.show { opacity: 1; }
-        .dots {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 32px;
-        }
-        .dot {
-            width: 6px; height: 6px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.08);
-        }
-        .dot:nth-child(1) { background: rgba(180,30,120,0.6); }
-        .dot:nth-child(3) { background: rgba(220,40,80,0.4); }
-        .lock-icon {
-            text-align: center;
-            margin-bottom: 8px;
-            font-size: 20px;
-            opacity: 0.3;
-        }
     </style>
 </head>
 <body>
     <div class="login-card">
-        <div class="lock-icon">✦</div>
         <div class="logo-icon">⛩</div>
-        <div style="text-align:center;margin-bottom:6px;">
+        <div style="text-align:center;margin-bottom:4px;">
             <span class="glow-text">manhwafuta</span>
         </div>
-        <div style="text-align:center;margin-bottom:32px;">
+        <div style="text-align:center;margin-bottom:28px;">
             <span class="subtitle">Manhwa Reader</span>
         </div>
-        <div class="dots">
-            <span class="dot"></span>
-            <span class="dot"></span>
-            <span class="dot"></span>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;flex-direction:column;gap:12px;">
             <input type="text" id="login-username" class="input-field" placeholder="Username" autocomplete="off">
             <input type="password" id="login-password" class="input-field" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
         </div>
         <div class="error-msg" id="login-error"></div>
-        <div style="margin-top:20px;">
+        <div style="margin-top:18px;">
             <button id="login-btn" class="login-btn" onclick="doLogin()">Enter</button>
         </div>
     </div>
