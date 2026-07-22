@@ -192,8 +192,9 @@
       ['manga-list-section','manga-detail-section','reader-section','downloads-section','local-detail-section'].forEach(id => {
         const el = $(id);
         if (!el) return;
-        el.classList.toggle('hidden', id !== s);
-        if (id === s) { el.classList.remove('section-enter'); void el.offsetHeight; el.classList.add('section-enter'); }
+        const match = id.includes(s);
+        el.classList.toggle('hidden', !match);
+        if (match) { el.classList.remove('section-enter'); void el.offsetHeight; el.classList.add('section-enter'); }
       });
     }
 
