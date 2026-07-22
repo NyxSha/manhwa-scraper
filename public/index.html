@@ -87,7 +87,7 @@
       <input type="text" id="nav-url" class="flex-1 min-w-[180px] text-sm" placeholder="Site URL..." onchange="navigateTo(this.value)" onkeydown="if(event.key==='Enter')navigateTo(this.value)">
       <input type="search" id="nav-search" class="w-36 text-sm" placeholder="Ara..." onkeydown="if(event.key==='Enter')doSearch()">
       <button onclick="doSearch()" class="btn-primary text-xs px-3 py-2">Ara</button>
-      <button onclick="openDownloads()" id="nav-downloads" class="btn-secondary text-xs whitespace-nowrap">📥 İndirilenler</button>
+      <button onclick="openDownloads()" id="nav-downloads" class="btn-secondary text-xs whitespace-nowrap">💾 Kaydedilenler</button>
       <button id="install-btn" class="hidden text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-semibold">+ Yükle</button>
       <button onclick="logout()" class="btn-secondary text-xs">Çıkış</button>
     </div>
@@ -137,14 +137,22 @@
 
     <div id="downloads-section" class="section-enter hidden">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-bold" style="background: linear-gradient(135deg,#a855f7,#ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">📥 İndirilenler</h2>
+        <h2 class="text-xl font-bold" style="background: linear-gradient(135deg,#a855f7,#ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">💾 Kaydedilenler</h2>
         <span id="storage-info" class="text-xs text-zinc-500"></span>
       </div>
       <div id="downloads-grid" class="downloads-grid"></div>
     </div>
 
+    <div id="site-manga-section" class="section-enter hidden">
+      <div class="flex items-center justify-between mb-4">
+        <button onclick="openDownloads()" class="btn-secondary text-xs">← Kaydedilenler</button>
+        <h2 class="text-lg font-bold" style="background:linear-gradient(135deg,#a855f7,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></h2>
+      </div>
+      <div id="site-manga-grid" class="downloads-grid"></div>
+    </div>
+
     <div id="local-detail-section" class="section-enter hidden">
-      <button onclick="openDownloads()" class="btn-secondary mb-4">← İndirilenler</button>
+        <button onclick="_currentSiteOrigin ? openSiteManga(_currentSiteOrigin) : openDownloads()" class="btn-secondary mb-4">← Kaydedilenler</button>
       <div class="card p-4 sm:p-6">
         <div class="flex flex-col sm:flex-row gap-5">
           <img id="local-detail-cover" class="w-full sm:w-52 rounded-xl manga-cover" style="aspect-ratio: 3/4;">
@@ -166,7 +174,7 @@
 
     let currentPageUrl = '', currentSiteUrl = '', currentMangaUrl = '', currentChapterReferer = '';
     let currentMangaList = [], chaptersList = [], chapterIndex = -1, currentChapterImages = [];
-    let currentMangaTitle = '', currentCoverUrl = '', _blobUrls = [];
+    let currentMangaTitle = '', currentCoverUrl = '', _blobUrls = [], _currentSiteOrigin = '';
 
     function $(id) { return document.getElementById(id); }
 
@@ -187,9 +195,22 @@
       if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
       return (bytes / 1048576).toFixed(1) + ' MB';
     }
+    function timeAgo(iso) {
+      if (!iso) return '';
+      const diff = Date.now() - new Date(iso).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'az önce';
+      if (mins < 60) return mins + ' dk önce';
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return hrs + ' saat önce';
+      const days = Math.floor(hrs / 24);
+      if (days < 30) return days + ' gün önce';
+      const months = Math.floor(days / 30);
+      return months + ' ay önce';
+    }
 
     function showSection(s) {
-      ['manga-list-section','manga-detail-section','reader-section','downloads-section','local-detail-section'].forEach(id => {
+      ['manga-list-section','manga-detail-section','reader-section','downloads-section','site-manga-section','local-detail-section'].forEach(id => {
         const el = $(id);
         if (!el) return;
         const match = id.includes(s);
@@ -332,6 +353,15 @@
           const rq = tx.objectStore('chapters').getAll();
           rq.onsuccess = () => resolve(rq.result || []);
           rq.onerror = e => reject(e.target.error);
+        });
+      },
+      async deleteChapter(chapterUrl) {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('chapters', 'readwrite');
+          tx.objectStore('chapters').delete(chapterUrl);
+          tx.oncomplete = () => resolve();
+          tx.onerror = e => reject(e.target.error);
         });
       }
     };
@@ -676,7 +706,8 @@
     // ---- Downloads Section ----
     async function openDownloads() {
       showSection('downloads');
-      showLoading('İndirilenler yükleniyor...');
+      _currentSiteOrigin = '';
+      showLoading('Kaydedilenler yükleniyor...');
       const grid = $('downloads-grid');
       grid.innerHTML = '';
       try {
@@ -685,34 +716,111 @@
         $('storage-info').textContent = mangaList.length + ' manga · ' + formatSize(totalSize);
 
         if (mangaList.length === 0) {
-          grid.innerHTML = '<div class="col-span-full text-center py-16 text-zinc-600"><div class="text-5xl mb-4">📥</div><p class="text-lg">Henüz indirilen yok</p><p class="text-sm mt-1">Bir manga detayından "Cihaza Kaydet" ile ekleyin.</p></div>';
+          grid.innerHTML = '<div class="col-span-full text-center py-16 text-zinc-600"><div class="text-5xl mb-4">💾</div><p class="text-lg">Henüz kaydedilen manga yok</p><p class="text-sm mt-1">Bir manga detayından "Cihaza Kaydet" ile ekleyin.</p></div>';
           hideLoading();
           return;
         }
 
-        mangaList.sort((a, b) => new Date(b.downloadedAt) - new Date(a.downloadedAt));
+        const groups = {};
         for (const m of mangaList) {
+          let origin;
+          try { origin = new URL(m.mangaUrl).origin; } catch { origin = 'bilinmeyen'; }
+          if (!groups[origin]) groups[origin] = { mangas: [], origin };
+          groups[origin].mangas.push(m);
+        }
+
+        for (const [origin, group] of Object.entries(groups)) {
+          const chaptersMap = await Promise.all(group.mangas.map(m => DB.getChaptersByManga(m.mangaUrl)));
+          const mangaCount = group.mangas.length;
+          const totalChapters = chaptersMap.reduce((s, c) => s + c.length, 0);
+          const totalGroupSize = chaptersMap.reduce((s, c) => s + c.reduce((a, b) => a + (b.size || 0), 0), 0);
+          const latestManga = group.mangas.sort((a, b) => new Date(b.downloadedAt) - new Date(a.downloadedAt))[0];
+
+          const div = document.createElement('div');
+          div.className = 'card cursor-pointer flex items-center gap-3 p-3';
+          div.innerHTML = `
+            <img src="${origin}/favicon.ico" class="w-8 h-8 rounded" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <div class="w-8 h-8 rounded bg-zinc-800 items-center justify-center hidden"><span class="text-sm opacity-50">🌐</span></div>
+            <div class="flex-1 min-w-0">
+              <h3 class="text-sm font-medium truncate">${new URL(origin).hostname || origin}</h3>
+              <div class="flex gap-2 mt-0.5 flex-wrap">
+                <span class="badge-purple">${mangaCount} manga</span>
+                <span class="badge-purple">${totalChapters} bölüm</span>
+                <span class="badge-size">${formatSize(totalGroupSize)}</span>
+              </div>
+            </div>
+            <span class="text-xs text-zinc-500">${timeAgo(latestManga.downloadedAt)}</span>`;
+          div.onclick = () => openSiteManga(origin);
+          grid.appendChild(div);
+        }
+      } catch (e) {
+        grid.innerHTML = '<div class="col-span-full text-center py-16 text-zinc-600"><p class="text-lg">Depolama alanına erişilemedi</p><p class="text-sm mt-1">' + e.message + '</p></div>';
+      }
+      hideLoading();
+    }
+
+    async function openSiteManga(origin) {
+      showSection('site-manga');
+      _currentSiteOrigin = origin;
+      const grid = $('site-manga-grid');
+      grid.innerHTML = '';
+      showLoading('Yükleniyor...');
+      const hostname = (() => { try { return new URL(origin).hostname; } catch { return origin; } })();
+      $('site-manga-section').querySelector('h2').textContent = '📦 ' + hostname;
+      try {
+        const all = await DB.getAllManga();
+        const mangas = all.filter(m => m.mangaUrl.startsWith(origin)).sort((a, b) => new Date(b.downloadedAt) - new Date(a.downloadedAt));
+        if (mangas.length === 0) { grid.innerHTML = '<div class="col-span-full text-center py-16 text-zinc-600"><p>Bu siteden kaydedilmiş manga yok.</p></div>'; hideLoading(); return; }
+
+        const selectAllWrap = document.createElement('div');
+        selectAllWrap.className = 'col-span-full flex items-center gap-3 mb-2';
+        selectAllWrap.innerHTML = `
+          <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+            <input type="checkbox" id="select-all-manga" class="accent-purple-500"> Tümünü Seç
+          </label>
+          <button id="delete-selected-manga" class="btn-danger text-xs hidden">🗑 Seçilenleri Sil</button>`;
+        grid.appendChild(selectAllWrap);
+
+        for (const m of mangas) {
           const chapters = await DB.getChaptersByManga(m.mangaUrl);
-          const totalImgs = chapters.reduce((s, c) => s + c.images?.length || 0, 0);
           const size = chapters.reduce((s, c) => s + (c.size || 0), 0);
           const div = document.createElement('div');
-          div.className = 'card cursor-pointer';
+          div.className = 'card cursor-pointer relative';
           div.innerHTML = `
+            <div class="absolute top-2 left-2 z-10">
+              <input type="checkbox" class="manga-checkbox accent-purple-500" data-url="${m.mangaUrl}">
+            </div>
             <img src="${m.coverUrl || ''}" class="w-full manga-cover" loading="lazy" onerror="this.parentElement.querySelector('.cover-fallback').style.display='flex'">
-            <div class="cover-fallback" style="display:none; aspect-ratio:3/4; align-items:center; justify-content:center; background:#1a1a2e;"><span class="text-3xl opacity-30">&#x1F4D6;</span></div>
+            <div class="cover-fallback" style="display:none; aspect-ratio:3/4; align-items:center; justify-content:center; background:#1a1a2e;"><span class="text-3xl opacity-30">📖</span></div>
             <div class="p-2.5">
               <h3 class="text-xs font-medium truncate">${m.title || 'Adsız'}</h3>
               <div class="flex gap-1 mt-1.5 flex-wrap">
                 <span class="badge-purple">${chapters.length} bölüm</span>
                 <span class="badge-size">${formatSize(size)}</span>
               </div>
+              <span class="text-[10px] text-zinc-600 mt-1 block">${timeAgo(m.downloadedAt)}</span>
             </div>`;
-          div.onclick = () => openLocalManga(m.mangaUrl);
+          div.onclick = (e) => { if (e.target.type !== 'checkbox') openLocalManga(m.mangaUrl); };
           grid.appendChild(div);
         }
-      } catch (e) {
-        grid.innerHTML = '<div class="col-span-full text-center py-16 text-zinc-600"><p class="text-lg">Depolama alanına erişilemedi</p><p class="text-sm mt-1">' + e.message + '</p></div>';
-      }
+
+        const checkboxes = grid.querySelectorAll('.manga-checkbox');
+        const selAll = $('select-all-manga');
+        const delBtn = $('delete-selected-manga');
+        function updateDeleteBtn() { delBtn.classList.toggle('hidden', !grid.querySelector('.manga-checkbox:checked')); }
+        selAll.onchange = () => { checkboxes.forEach(cb => cb.checked = selAll.checked); updateDeleteBtn(); };
+        checkboxes.forEach(cb => cb.onchange = updateDeleteBtn);
+        delBtn.onclick = async () => {
+          const selected = [...grid.querySelectorAll('.manga-checkbox:checked')].map(cb => cb.dataset.url);
+          if (selected.length === 0) return;
+          if (!confirm(`${selected.length} manga(yı) cihazdan kaldırmak istediğinize emin misiniz?`)) return;
+          showLoading('Kaldırılıyor...');
+          for (const url of selected) await DB.deleteManga(url);
+          hideLoading();
+          toast(`${selected.length} manga kaldırıldı.`, 'info');
+          openSiteManga(origin);
+        };
+      } catch (e) { grid.innerHTML = '<div class="col-span-full text-center py-16 text-zinc-600"><p>Hata: ' + e.message + '</p></div>'; }
       hideLoading();
     }
 
@@ -728,19 +836,56 @@
         if (!confirm('Bu mangayı cihazdan kaldırmak istediğinize emin misiniz?')) return;
         await DB.deleteManga(mangaUrl);
         toast('Kaldırıldı.', 'info');
-        openDownloads();
+        if (_currentSiteOrigin) openSiteManga(_currentSiteOrigin); else openDownloads();
       };
       const chDiv = $('local-detail-chapters');
       chDiv.innerHTML = '';
       chaptersList = chapters.map(c => ({ href: c.chapterUrl, title: c.chapterTitle }));
       chapters.forEach(c => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex items-center gap-2';
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.className = 'chapter-checkbox accent-purple-500 shrink-0';
+        chk.dataset.chapterUrl = c.chapterUrl;
         const btn = document.createElement('button');
-        btn.className = 'chapter-btn';
+        btn.className = 'chapter-btn flex-1';
         const imgCount = c.images?.filter(i => i.data).length || 0;
         btn.textContent = c.chapterTitle + ` (${imgCount} resim)`;
         btn.onclick = () => openChapter(mangaUrl, c.chapterUrl, c.chapterTitle, true);
-        chDiv.appendChild(btn);
+        wrapper.appendChild(chk);
+        wrapper.appendChild(btn);
+        chDiv.appendChild(wrapper);
       });
+
+      const bottomBar = document.createElement('div');
+      bottomBar.className = 'flex items-center gap-3 mt-3';
+      const selAllLabel = document.createElement('label');
+      selAllLabel.className = 'flex items-center gap-2 text-xs text-zinc-400 cursor-pointer';
+      const selAllChk = document.createElement('input');
+      selAllChk.type = 'checkbox';
+      selAllChk.className = 'accent-purple-500';
+      selAllLabel.appendChild(selAllChk);
+      selAllLabel.appendChild(document.createTextNode('Tümünü Seç'));
+      const delSelBtn = document.createElement('button');
+      delSelBtn.className = 'btn-danger text-xs hidden';
+      delSelBtn.textContent = '🗑 Seçilenleri Sil';
+      selAllChk.onchange = () => { chDiv.querySelectorAll('.chapter-checkbox').forEach(cb => cb.checked = selAllChk.checked); updateDel(); };
+      function updateDel() { delSelBtn.classList.toggle('hidden', !chDiv.querySelector('.chapter-checkbox:checked')); }
+      chDiv.querySelectorAll('.chapter-checkbox').forEach(cb => cb.onchange = updateDel);
+      delSelBtn.onclick = async () => {
+        const selected = [...chDiv.querySelectorAll('.chapter-checkbox:checked')].map(cb => cb.dataset.chapterUrl);
+        if (selected.length === 0) return;
+        if (!confirm(`${selected.length} bölümü silmek istediğinize emin misiniz?`)) return;
+        showLoading('Siliniyor...');
+        for (const url of selected) await DB.deleteChapter(url);
+        hideLoading();
+        toast(`${selected.length} bölüm silindi.`, 'info');
+        openLocalManga(mangaUrl);
+      };
+      bottomBar.appendChild(selAllLabel);
+      bottomBar.appendChild(delSelBtn);
+      chDiv.appendChild(bottomBar);
       hideLoading();
     }
 
