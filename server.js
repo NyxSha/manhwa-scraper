@@ -78,7 +78,11 @@ app.post('/api/login', (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
-  req.session.destroy(() => res.json({ success: true }));
+  if (!req.session?.authenticated) return res.status(401).json({ error: 'Unauthorized' });
+  req.session.destroy(() => {
+    res.clearCookie('connect.sid', { path: '/' });
+    res.json({ success: true });
+  });
 });
 
 app.get('/api/check-auth', (req, res) => {
@@ -95,7 +99,7 @@ app.get('/api/tunnel', async (req, res) => {
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.send(response.data);
   } catch (error) {
-    res.status(502).json({ error: 'Kaynak siteye erişilemedi.', detail: error.message });
+    res.status(502).json({ error: 'Kaynak siteye erişilemedi.' });
   }
 });
 
@@ -173,7 +177,7 @@ app.get('/api/chapters', async (req, res) => {
     if (result.chapters.length === 0) return res.status(404).json({ error: 'Bölüm bulunamadı.', ...result });
     res.json(result);
   } catch (error) {
-    res.status(502).json({ error: 'Bölümler yüklenemedi.', detail: error.message });
+    res.status(502).json({ error: 'Bölümler yüklenemedi.' });
   }
 });
 
@@ -195,6 +199,7 @@ app.get('/api/image', async (req, res) => {
 
 async function fetchImageWithRetry(imgUrl, referer, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
+    let controller;
     try {
       const headers = getHeaders(imgUrl, 'image/avif,image/webp,image/apng,image/png,image/jpeg,image/gif,*/*;q=0.9', referer);
       if (attempt > 0) {
@@ -202,18 +207,32 @@ async function fetchImageWithRetry(imgUrl, referer, retries = 2) {
         headers['Referer'] = attempt === 1 ? referer : referer.split('?')[0] + '?page=' + Math.floor(Math.random() * 1000);
         headers['Origin'] = new URL(referer).origin;
       }
-      const imgRes = await tunnelAxios.get(imgUrl, { headers, responseType: 'arraybuffer', timeout: 15000 + attempt * 5000 });
-      if (imgRes.status === 200) {
-        const ct = (imgRes.headers['content-type'] || '').toLowerCase();
-        if (ct.startsWith('image/') || ct.startsWith('application/octet-stream') || !ct) {
-          return Buffer.from(imgRes.data);
+      const timeout = 15000 + attempt * 5000;
+      controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      try {
+        const imgRes = await tunnelAxios.get(imgUrl, {
+          headers,
+          responseType: 'arraybuffer',
+          signal: controller.signal,
+          timeout
+        });
+        if (imgRes.status === 200) {
+          const ct = (imgRes.headers['content-type'] || '').toLowerCase();
+          if (ct.startsWith('image/') || ct.startsWith('application/octet-stream') || !ct) {
+            return Buffer.from(imgRes.data);
+          }
         }
+      } finally {
+        clearTimeout(timeoutId);
       }
     } catch (_) {
-      if (attempt === retries) throw new Error(`Image failed after ${retries + 1} attempts`);
+      if (attempt === retries) throw new Error('Image download failed');
+    } finally {
+      if (controller) controller.abort();
     }
   }
-  throw new Error(`Image failed after ${retries + 1} attempts`);
+  throw new Error('Image download failed');
 }
 
 const BLOCKED_IMG_KEYWORDS = new Set([
@@ -256,6 +275,7 @@ function isValidContentImage(url) {
 
 function extractImagesFromHtml(html) {
   const urls = new Set();
+  const MAX_MATCHES = 500;
   const containerPatterns = [
     /reading-content[^>]*>([\s\S]*?)(?:<\/div>\s*<div|<\/section>|<\/article>)/gi,
     /chapter-content[^>]*>([\s\S]*?)(?:<\/div>\s*<div|<\/section>|<\/article>)/gi,
@@ -267,19 +287,22 @@ function extractImagesFromHtml(html) {
   ];
   const imgSrcRe = /(?:data-src|src|data-lazy-src|data-original)=["']([^"']+\.(?:jpg|jpeg|png|webp|avif|gif)[^"']*)["']/gi;
 
+  let matchCount = 0;
   for (const pattern of containerPatterns) {
     let m;
     while ((m = pattern.exec(html)) !== null) {
+      if (++matchCount > MAX_MATCHES) break;
       let im;
       while ((im = imgSrcRe.exec(m[1])) !== null) {
         const url = im[1].split('?')[0];
         if (isValidContentImage(url)) urls.add(url);
       }
     }
-    if (urls.size > 2) break;
+    if (matchCount > MAX_MATCHES || urls.size > 2) break;
   }
 
   if (urls.size < 2) {
+    matchCount = 0;
     const attrPatterns = [
       /data-src=["']([^"']+\.(?:jpg|jpeg|png|webp|avif|gif)[^"']*)/gi,
       /data-lazy-src=["']([^"']+\.(?:jpg|jpeg|png|webp|avif|gif)[^"']*)/gi,
@@ -289,16 +312,22 @@ function extractImagesFromHtml(html) {
     for (const regex of attrPatterns) {
       let m;
       while ((m = regex.exec(html)) !== null) {
+        if (++matchCount > MAX_MATCHES) break;
         const url = m[1].split('?')[0];
         if (isValidContentImage(url)) urls.add(url);
       }
+      if (matchCount > MAX_MATCHES) break;
     }
 
-    const genericRe = /https?:\/\/[^\s"'<>()]+\.(?:jpg|jpeg|png|webp|avif|gif)(?:\?[^\s"'<>()]*)?/gi;
-    let m;
-    while ((m = genericRe.exec(html)) !== null) {
-      const url = m[0].split('?')[0];
-      if (isValidContentImage(url)) urls.add(url);
+    if (urls.size < 2) {
+      matchCount = 0;
+      const genericRe = /https?:\/\/[^\s"'<>()]+\.(?:jpg|jpeg|png|webp|avif|gif)(?:\?[^\s"'<>()]*)?/gi;
+      let m;
+      while ((m = genericRe.exec(html)) !== null) {
+        if (++matchCount > MAX_MATCHES) break;
+        const url = m[0].split('?')[0];
+        if (isValidContentImage(url)) urls.add(url);
+      }
     }
   }
   return [...urls];
@@ -372,7 +401,7 @@ app.get('/api/download', async (req, res) => {
     res.send(buf);
   } catch (error) {
     console.error(`[İndirme Hatası] ${error.message}`);
-    if (!res.headersSent) res.status(502).json({ error: 'İndirme başarısız.', detail: error.message });
+    if (!res.headersSent) res.status(502).json({ error: 'İndirme başarısız.' });
   }
 });
 
@@ -420,7 +449,7 @@ app.post('/api/download-images', async (req, res) => {
     res.send(buf);
   } catch (error) {
     console.error(`[İndirme Hatası] ${error.message}`);
-    if (!res.headersSent) res.status(502).json({ error: 'İndirme başarısız.', detail: error.message });
+    if (!res.headersSent) res.status(502).json({ error: 'İndirme başarısız.' });
   }
 });
 
