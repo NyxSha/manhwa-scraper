@@ -84,7 +84,7 @@
   <nav class="sticky top-0 z-50 glass" style="border-bottom: 1px solid rgba(168,85,247,0.1);">
     <div class="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2 flex-wrap">
       <span onclick="showSection('list'); loadLatest()" class="text-xl font-extrabold tracking-tight cursor-pointer shrink-0" style="background: linear-gradient(135deg,#a855f7,#ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">manhwafuta</span>
-      <input type="text" id="nav-url" class="flex-1 min-w-[180px] text-sm" placeholder="Site URL..." onchange="navigateTo(this.value)">
+      <input type="text" id="nav-url" class="flex-1 min-w-[180px] text-sm" placeholder="Site URL..." onchange="navigateTo(this.value)" onkeydown="if(event.key==='Enter')navigateTo(this.value)">
       <input type="search" id="nav-search" class="w-36 text-sm" placeholder="Ara..." onkeydown="if(event.key==='Enter')doSearch()">
       <button onclick="doSearch()" class="btn-primary text-xs px-3 py-2">Ara</button>
       <button onclick="openDownloads()" id="nav-downloads" class="btn-secondary text-xs whitespace-nowrap">📥 İndirilenler</button>
@@ -151,7 +151,7 @@
           <div class="flex-1 min-w-0">
             <h2 id="local-detail-title" class="text-xl sm:text-2xl font-bold mb-3" style="background: linear-gradient(135deg,#a855f7,#ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></h2>
             <p id="local-detail-info" class="text-xs text-zinc-500 mb-3"></p>
-            <button id="local-detail-delete" class="btn-danger text-sm mb-4 w-full" onclick="deleteLocalManga()">🗑 Cihazdan Kaldır</button>
+            <button id="local-detail-delete" class="btn-danger text-sm mb-4 w-full">🗑 Cihazdan Kaldır</button>
             <div id="local-detail-chapters" class="chapter-grid grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-96 overflow-y-auto pr-1"></div>
           </div>
         </div>
@@ -166,7 +166,7 @@
 
     let currentPageUrl = '', currentSiteUrl = '', currentMangaUrl = '', currentChapterReferer = '';
     let currentMangaList = [], chaptersList = [], chapterIndex = -1, currentChapterImages = [];
-    let currentMangaTitle = '', currentCoverUrl = '';
+    let currentMangaTitle = '', currentCoverUrl = '', _blobUrls = [];
 
     function $(id) { return document.getElementById(id); }
 
@@ -344,7 +344,7 @@
       if (encodedPageUrl) {
         try { url = safeDecode(encodedPageUrl); } catch (_) { url = encodedPageUrl; }
       } else {
-        url = 'https://hentaixdickgirl.com';
+        url = $('nav-url').value || 'https://hentaixdickgirl.com';
       }
       url = fixUrl(url);
       currentPageUrl = url;
@@ -483,8 +483,11 @@
     async function openChapter(mUrl, cUrl, title, localMode) {
       showSection('reader');
       showLoading('Bölüm yükleniyor...');
+      // Revoke old blob URLs to prevent memory leak
+      _blobUrls.forEach(u => URL.revokeObjectURL(u));
+      _blobUrls = [];
       const decodedUrl = localMode ? cUrl : safeDecode(cUrl);
-      const mangaEncoded = localMode ? mUrl : mUrl;
+      currentChapterUrl = decodedUrl;
       chapterIndex = chaptersList.findIndex(c => c.href === decodedUrl);
       currentChapterReferer = localMode ? mUrl : safeDecode(mUrl);
 
@@ -526,9 +529,10 @@
             el.src = img.url;
             el.onload = function () { this.classList.add('loaded'); };
             el.onerror = function () {
-              // Fallback to local blob
               if (img.data && this.src !== URL.createObjectURL(img.data)) {
-                this.src = URL.createObjectURL(img.data);
+                const blobUrl = URL.createObjectURL(img.data);
+                _blobUrls.push(blobUrl);
+                this.src = blobUrl;
               } else { this.style.display = 'none'; }
             };
             imgContainer.appendChild(el);
@@ -620,7 +624,7 @@
     }
 
     async function saveCurrentChapter() {
-      if (currentChapterImages.length === 0) { toast('Önce bölümü açın.', 'error'); return; }
+      if (!currentChapterUrl || currentChapterImages.length === 0) { toast('Önce bölümü açın.', 'error'); return; }
       const title = $('reader-chapter-title').textContent || 'Bölüm';
       const count = await saveChapterImages(currentChapterUrl, title, currentMangaUrl, currentChapterImages, currentChapterReferer);
       toast(count + ' görsel cihaza kaydedildi!', 'success');
@@ -653,6 +657,7 @@
           const imgData = [];
           for (let j = 0; j < images.length; j++) {
             $('loading-text').textContent = `Bölüm ${i + 1}/${chapters.length} - Görsel ${j + 1}/${images.length}`;
+            setProgress(((i + (j + 1) / images.length) / chapters.length) * 100);
             try {
               const blob = await fetchImageAsBlob(images[j], ch.href);
               imgData.push({ url: images[j], data: blob });
@@ -674,35 +679,39 @@
       showLoading('İndirilenler yükleniyor...');
       const grid = $('downloads-grid');
       grid.innerHTML = '';
-      const mangaList = await DB.getAllManga();
-      const totalSize = await DB.getTotalSize();
-      $('storage-info').textContent = mangaList.length + ' manga · ' + formatSize(totalSize);
+      try {
+        const mangaList = await DB.getAllManga();
+        const totalSize = await DB.getTotalSize();
+        $('storage-info').textContent = mangaList.length + ' manga · ' + formatSize(totalSize);
 
-      if (mangaList.length === 0) {
-        grid.innerHTML = '<div class="col-span-full text-center py-16 text-zinc-600"><div class="text-5xl mb-4">📥</div><p class="text-lg">Henüz indirilen yok</p><p class="text-sm mt-1">Bir manga detayından "Cihaza Kaydet" ile ekleyin.</p></div>';
-        hideLoading();
-        return;
-      }
+        if (mangaList.length === 0) {
+          grid.innerHTML = '<div class="col-span-full text-center py-16 text-zinc-600"><div class="text-5xl mb-4">📥</div><p class="text-lg">Henüz indirilen yok</p><p class="text-sm mt-1">Bir manga detayından "Cihaza Kaydet" ile ekleyin.</p></div>';
+          hideLoading();
+          return;
+        }
 
-      mangaList.sort((a, b) => new Date(b.downloadedAt) - new Date(a.downloadedAt));
-      for (const m of mangaList) {
-        const chapters = await DB.getChaptersByManga(m.mangaUrl);
-        const totalImgs = chapters.reduce((s, c) => s + c.images?.length || 0, 0);
-        const size = chapters.reduce((s, c) => s + (c.size || 0), 0);
-        const div = document.createElement('div');
-        div.className = 'card cursor-pointer';
-        div.innerHTML = `
-          <img src="${m.coverUrl || ''}" class="w-full manga-cover" loading="lazy" onerror="this.parentElement.querySelector('.cover-fallback').style.display='flex'">
-          <div class="cover-fallback" style="display:none; aspect-ratio:3/4; align-items:center; justify-content:center; background:#1a1a2e;"><span class="text-3xl opacity-30">&#x1F4D6;</span></div>
-          <div class="p-2.5">
-            <h3 class="text-xs font-medium truncate">${m.title || 'Adsız'}</h3>
-            <div class="flex gap-1 mt-1.5 flex-wrap">
-              <span class="badge-purple">${chapters.length} bölüm</span>
-              <span class="badge-size">${formatSize(size)}</span>
-            </div>
-          </div>`;
-        div.onclick = () => openLocalManga(m.mangaUrl);
-        grid.appendChild(div);
+        mangaList.sort((a, b) => new Date(b.downloadedAt) - new Date(a.downloadedAt));
+        for (const m of mangaList) {
+          const chapters = await DB.getChaptersByManga(m.mangaUrl);
+          const totalImgs = chapters.reduce((s, c) => s + c.images?.length || 0, 0);
+          const size = chapters.reduce((s, c) => s + (c.size || 0), 0);
+          const div = document.createElement('div');
+          div.className = 'card cursor-pointer';
+          div.innerHTML = `
+            <img src="${m.coverUrl || ''}" class="w-full manga-cover" loading="lazy" onerror="this.parentElement.querySelector('.cover-fallback').style.display='flex'">
+            <div class="cover-fallback" style="display:none; aspect-ratio:3/4; align-items:center; justify-content:center; background:#1a1a2e;"><span class="text-3xl opacity-30">&#x1F4D6;</span></div>
+            <div class="p-2.5">
+              <h3 class="text-xs font-medium truncate">${m.title || 'Adsız'}</h3>
+              <div class="flex gap-1 mt-1.5 flex-wrap">
+                <span class="badge-purple">${chapters.length} bölüm</span>
+                <span class="badge-size">${formatSize(size)}</span>
+              </div>
+            </div>`;
+          div.onclick = () => openLocalManga(m.mangaUrl);
+          grid.appendChild(div);
+        }
+      } catch (e) {
+        grid.innerHTML = '<div class="col-span-full text-center py-16 text-zinc-600"><p class="text-lg">Depolama alanına erişilemedi</p><p class="text-sm mt-1">' + e.message + '</p></div>';
       }
       hideLoading();
     }

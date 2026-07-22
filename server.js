@@ -3,6 +3,7 @@ const axios = require('axios');
 const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
+const crypto = require('crypto');
 
 const { ZipArchive } = require('archiver');
 
@@ -22,7 +23,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'manhwafuta-' + Math.random().toString(36),
+  secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
   resave: false,
   saveUninitialized: false,
   cookie: { maxAge: 24 * 60 * 60 * 1000, httpOnly: true, sameSite: 'lax' }
@@ -375,33 +376,6 @@ app.get('/api/download', async (req, res) => {
   }
 });
 
-app.post('/api/save-chapters', (req, res) => {
-  const { chapters, name, baseUrl } = req.body;
-  if (!chapters?.length) return res.status(400).json({ error: 'Bölüm listesi zorunludur.' });
-  req.session.downloadData = { chapters, name, baseUrl };
-  res.json({ success: true, count: chapters.length });
-});
-
-app.get('/api/download-all', async (req, res) => {
-  const data = req.session.downloadData;
-  if (!data?.chapters?.length) return res.status(400).json({ error: 'İndirme verisi bulunamadı.' });
-
-  try {
-    let fileName = (data.name || 'manga').replace(/[^\w\- ]/g, '').trim() + ' - All Chapters';
-    console.log(`[Toplu İndirme] ${fileName}, ${data.chapters.length} bölüm`);
-    const buf = await buildCbz(data.chapters, data.baseUrl || data.chapters[0].href);
-    delete req.session.downloadData;
-    res.set('Content-Type', 'application/zip');
-    res.set('Content-Disposition', `attachment; filename="${fileName}.cbz"`);
-    res.set('Content-Length', buf.length);
-    res.send(buf);
-  } catch (error) {
-    console.error(`[Toplu İndirme Hatası] ${error.message}`);
-    if (res.headersSent) { res.destroy(); return; }
-    res.status(502).json({ error: 'İndirme başarısız.', detail: error.message });
-  }
-});
-
 app.post('/api/download-images', async (req, res) => {
   const { images, filename } = req.body;
   if (!images?.length) return res.status(400).json({ error: 'Resim listesi zorunludur.' });
@@ -457,7 +431,9 @@ app.get('/login.html', (req, res) => {
 const STATIC_FILES = ['favicon.ico', 'favicon.gif', 'sw.js', 'manifest.json', 'icon-192x192.png', 'icon-512x512.png'];
 for (const file of STATIC_FILES) {
   app.get('/' + file, (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', file));
+    res.sendFile(path.join(__dirname, 'public', file), err => {
+      if (err) res.status(404).end();
+    });
   });
 }
 
