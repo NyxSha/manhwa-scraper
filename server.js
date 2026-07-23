@@ -5,7 +5,7 @@ const path = require('path');
 const session = require('express-session');
 const crypto = require('crypto');
 
-const { ZipArchive } = require('archiver');
+const archiver = require('archiver');
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
@@ -358,7 +358,7 @@ async function buildCbz(chapters, baseUrl) {
     allChapters.push({ chName, images, title: ch.title });
   }
 
-  const archive = new ZipArchive();
+  const archive = archiver('zip', { zlib: { level: 9 } });
   const chunks = [];
   archive.on('data', c => chunks.push(c));
   const done = new Promise((resolve, reject) => {
@@ -423,7 +423,7 @@ app.post('/api/download-images', async (req, res) => {
       } catch (_) {}
     }
 
-    const archive = new ZipArchive();
+    const archive = archiver('zip', { zlib: { level: 9 } });
     const chunks = [];
     archive.on('data', c => chunks.push(c));
     const done = new Promise((resolve, reject) => {
