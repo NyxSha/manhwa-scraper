@@ -106,13 +106,13 @@
 
   <nav class="sticky top-0 z-50 glass" style="border-bottom: 1px solid rgba(168,85,247,0.1);">
     <div class="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2 flex-wrap">
-      <span onclick="showSection('list'); loadLatest()" class="text-xl font-extrabold tracking-tight cursor-pointer shrink-0" style="background: linear-gradient(135deg,#a855f7,#ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">manhwafuta</span>
+      <span onclick="if(navigator.onLine){ showSection('list'); loadLatest(); } else { openDownloads(); }" class="text-xl font-extrabold tracking-tight cursor-pointer shrink-0" style="background: linear-gradient(135deg,#a855f7,#ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">manhwafuta</span>
       <input type="text" id="nav-url" class="flex-1 min-w-[180px] text-sm" placeholder="Site URL..." onchange="navigateTo(this.value)" onkeydown="if(event.key==='Enter')navigateTo(this.value)">
       <input type="search" id="nav-search" class="w-36 text-sm" placeholder="Ara..." onkeydown="if(event.key==='Enter')doSearch()">
-      <button onclick="doSearch()" class="btn-primary text-xs px-3 py-2">Ara</button>
+      <button onclick="doSearch()" id="nav-search-btn" class="btn-primary text-xs px-3 py-2">Ara</button>
       <button onclick="openDownloads()" id="nav-downloads" class="btn-secondary text-xs whitespace-nowrap">💾 Kaydedilenler</button>
       <button id="install-btn" class="hidden text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-semibold">+ Yükle</button>
-      <button onclick="logout()" class="btn-secondary text-xs">Çıkış</button>
+      <button onclick="logout()" id="nav-logout-btn" class="btn-secondary text-xs">Çıkış</button>
     </div>
   </nav>
 
@@ -400,9 +400,38 @@
       }
     };
 
-    document.addEventListener('DOMContentLoaded', () => loadLatest());
+    function updateOnlineStatus() {
+      const isOnline = navigator.onLine;
+      const navUrl = $('nav-url');
+      const navSearch = $('nav-search');
+      const searchBtn = $('nav-search-btn');
+      const logoutBtn = $('nav-logout-btn');
+
+      if (navUrl) navUrl.style.display = isOnline ? '' : 'none';
+      if (navSearch) navSearch.style.display = isOnline ? '' : 'none';
+      if (searchBtn) searchBtn.style.display = isOnline ? '' : 'none';
+      if (logoutBtn) logoutBtn.style.display = isOnline ? '' : 'none';
+
+      if (!isOnline) {
+        openDownloads();
+      }
+    }
+
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updateOnlineStatus();
+      if (navigator.onLine) {
+        loadLatest();
+      }
+    });
 
     async function loadLatest(encodedPageUrl) {
+      if (!navigator.onLine) {
+        openDownloads();
+        return;
+      }
       showLoading('Site yükleniyor...');
       let url;
       if (encodedPageUrl) {
@@ -416,10 +445,14 @@
       $('nav-url').value = url;
       try {
         const res = await fetch(TUNNEL_URL + encodeURIComponent(url));
+        if (!res.ok) throw new Error('Sunucu yanıt vermedi');
         const html = await res.text();
         const doc = new DOMParser().parseFromString(html, 'text/html');
         renderMangaGrid(doc, url, encodedPageUrl);
-      } catch (e) { toast('Site yüklenemedi: ' + e.message, 'error'); }
+      } catch (e) {
+        toast('Site yüklenemedi: ' + e.message, 'error');
+        openDownloads();
+      }
       hideLoading();
     }
 
@@ -588,20 +621,25 @@
           currentChapterImages = localCh.images.map(i => i.url);
           _localChapterData = localCh.images;
           $('reader-save-btn').classList.add('hidden');
-          // Show as online URLs but with local blob fallback
           for (const img of localCh.images) {
             const el = document.createElement('img');
             el.className = 'reader-img w-full rounded-lg mb-1';
             el.loading = 'lazy';
-            el.src = img.url;
+            if (img.data && (!navigator.onLine || localMode)) {
+              const blobUrl = URL.createObjectURL(img.data);
+              _blobUrls.push(blobUrl);
+              el.src = blobUrl;
+            } else {
+              el.src = img.url;
+              el.onerror = function () {
+                if (img.data) {
+                  const blobUrl = URL.createObjectURL(img.data);
+                  _blobUrls.push(blobUrl);
+                  this.src = blobUrl;
+                } else { this.style.display = 'none'; }
+              };
+            }
             el.onload = function () { this.classList.add('loaded'); };
-            el.onerror = function () {
-              if (img.data && this.src !== URL.createObjectURL(img.data)) {
-                const blobUrl = URL.createObjectURL(img.data);
-                _blobUrls.push(blobUrl);
-                this.src = blobUrl;
-              } else { this.style.display = 'none'; }
-            };
             imgContainer.appendChild(el);
           }
           return;
