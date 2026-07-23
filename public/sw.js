@@ -1,20 +1,37 @@
-const CACHE = 'manhwafuta-v4';
+const CACHE = 'manhwafuta-v5';
 
 self.addEventListener('install', e => {
-  const ASSETS = [
-    '/', '/index.html', '/login.html',
-    '/favicon.gif', '/favicon.ico',
-    '/manifest.json', '/icon-192x192.png', '/icon-512x512.png'
-  ];
   e.waitUntil(
     caches.open(CACHE).then(async c => {
-      await c.addAll(ASSETS).catch(() => {});
+      const localAssets = [
+        '/', '/index.html', '/login.html', '/sw.js',
+        '/favicon.ico', '/favicon.gif',
+        '/manifest.json', '/icon-192x192.png', '/icon-512x512.png'
+      ];
+      await c.addAll(localAssets).catch(() => {});
+
       const cdnUrls = [
         'https://cdn.tailwindcss.com',
         'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap'
       ];
       for (const url of cdnUrls) {
-        try { const r = await fetch(url); if (r.ok) await c.put(url, r); } catch (_) {}
+        try {
+          const r = await fetch(url);
+          if (r.ok || r.type === 'opaque') {
+            await c.put(url, r.clone());
+            if (url.includes('fonts.googleapis.com')) {
+              const css = await r.text();
+              const fontRe = /url\(['"](https:\/\/fonts\.gstatic\.com[^'")]+)['"]\)/g;
+              let m;
+              while ((m = fontRe.exec(css))) {
+                try {
+                  const fr = await fetch(m[1]);
+                  if (fr.ok || fr.type === 'opaque') await c.put(m[1], fr);
+                } catch (_) {}
+              }
+            }
+          }
+        } catch (_) {}
       }
     }).then(() => self.skipWaiting())
   );
@@ -41,7 +58,7 @@ async function cacheFirstWithFallback(request) {
   if (cached) return cached;
   try {
     const res = await fetch(request);
-    if (res.ok || res.type === 'opaqueredirect') {
+    if (res.ok || res.type === 'opaqueredirect' || res.type === 'opaque') {
       const cache = await caches.open(CACHE);
       cache.put(request, res.clone());
     }
