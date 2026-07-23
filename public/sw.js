@@ -1,4 +1,4 @@
-const CACHE = 'manhwafuta-v2';
+const CACHE = 'manhwafuta-v3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -9,18 +9,10 @@ const ASSETS = [
   '/icon-192x192.png',
   '/icon-512x512.png'
 ];
-const CDN_ASSETS = [
-  'https://cdn.tailwindcss.com',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap'
-];
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => {
-      // best-effort cache of CDN resources (non-blocking)
-      caches.open(CACHE).then(c => c.addAll(CDN_ASSETS)).catch(() => {});
-      self.skipWaiting();
-    })
+    caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
   );
 });
 
@@ -33,25 +25,63 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const { request } = e;
   if (request.method !== 'GET') return;
+
   if (request.url.startsWith(self.location.origin + '/api/')) {
     e.respondWith(networkFirst(request));
+  } else if (request.mode === 'navigate') {
+    e.respondWith(networkFirstOrFallback(request));
   } else {
     e.respondWith(cacheFirst(request));
   }
 });
 
 async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  return cached || fetch(request);
+  try {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    const res = await fetch(request);
+    if (res.ok) {
+      const cache = await caches.open(CACHE);
+      cache.put(request, res.clone());
+    }
+    return res;
+  } catch {
+    const cached = await caches.match(request);
+    return cached || new Response('Offline', { status: 503 });
+  }
 }
 
 async function networkFirst(request) {
   try {
     const res = await fetch(request);
-    const cache = await caches.open(CACHE);
-    cache.put(request, res.clone());
+    if (res.ok || res.type === 'opaqueredirect') {
+      const cache = await caches.open(CACHE);
+      cache.put(request, res.clone());
+    }
     return res;
   } catch {
-    return caches.match(request);
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    if (request.url.includes('/api/')) {
+      return new Response(JSON.stringify({ error: 'offline' }), {
+        status: 503, headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    return caches.match('/');
+  }
+}
+
+async function networkFirstOrFallback(request) {
+  try {
+    const res = await fetch(request);
+    if (res.ok || res.type === 'opaqueredirect') {
+      const cache = await caches.open(CACHE);
+      cache.put(request, res.clone());
+    }
+    return res;
+  } catch {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    return caches.match('/');
   }
 }

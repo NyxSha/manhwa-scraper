@@ -157,7 +157,7 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    window.location.href = '/';
+                    window.location.replace('/');
                 } else {
                     error.textContent = data.error || 'Invalid credentials';
                     error.classList.add('show');
