@@ -1,6 +1,7 @@
-const CACHE = 'manhwafuta-v1';
+const CACHE = 'manhwafuta-v2';
 const ASSETS = [
   '/',
+  '/index.html',
   '/login.html',
   '/favicon.gif',
   '/favicon.ico',
@@ -8,10 +9,18 @@ const ASSETS = [
   '/icon-192x192.png',
   '/icon-512x512.png'
 ];
+const CDN_ASSETS = [
+  'https://cdn.tailwindcss.com',
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap'
+];
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => {
+      // best-effort cache of CDN resources (non-blocking)
+      caches.open(CACHE).then(c => c.addAll(CDN_ASSETS)).catch(() => {});
+      self.skipWaiting();
+    })
   );
 });
 
