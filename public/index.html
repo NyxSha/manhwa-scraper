@@ -210,10 +210,12 @@
     }
 
     function showSection(s) {
-      ['manga-list-section','manga-detail-section','reader-section','downloads-section','site-manga-section','local-detail-section'].forEach(id => {
+      const map = { 'list':'manga-list-section', 'detail':'manga-detail-section', 'reader':'reader-section', 'downloads':'downloads-section', 'site-manga':'site-manga-section', 'local-detail':'local-detail-section' };
+      const target = map[s];
+      Object.values(map).forEach(id => {
         const el = $(id);
         if (!el) return;
-        const match = id.includes(s);
+        const match = id === target;
         el.classList.toggle('hidden', !match);
         if (match) { el.classList.remove('section-enter'); void el.offsetHeight; el.classList.add('section-enter'); }
       });
