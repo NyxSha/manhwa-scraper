@@ -910,15 +910,28 @@
       const title = $('reader-chapter-title').textContent || 'Bölüm';
       const filename = [manga, title].filter(Boolean).join(' - ').replace(/\s+/g, ' ').trim() || 'chapter';
 
+      let coverEntry = null;
+      if (currentCoverUrl) {
+        try {
+          const r = await fetch('/api/image?url=' + encodeURIComponent(currentCoverUrl));
+          if (r.ok) {
+            const blob = await r.blob();
+            const base64 = await blobToBase64(blob);
+            const ext = currentCoverUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
+            coverEntry = { data: base64, ext };
+          }
+        } catch (_) {}
+      }
+
       if (_localChapterData?.length > 0) {
         showLoading('CBZ hazırlanıyor...');
         const imageData = [];
-        for (let i = 0; i < _localChapterData.length; i++) {
-          const img = _localChapterData[i];
+        if (coverEntry) imageData.push(coverEntry);
+        for (const img of _localChapterData) {
           if (img.data) {
             const base64 = await blobToBase64(img.data);
             const ext = img.url.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
-            imageData.push({ data: base64, ext, idx: i });
+            imageData.push({ data: base64, ext });
           }
         }
         try {
@@ -934,7 +947,9 @@
         return;
       }
 
-      const images = currentChapterImages.map(url => ({ url, referer: currentChapterReferer }));
+      const images = [];
+      if (coverEntry) images.push(coverEntry);
+      currentChapterImages.forEach(url => images.push({ url, referer: currentChapterReferer }));
       showLoading('CBZ hazırlanıyor...');
       fetch('/api/download-images', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -949,6 +964,19 @@
       const name = decodeURIComponent(currentMangaUrl.split('/').filter(Boolean).pop() || 'manga');
       const chapters = [...chaptersList].reverse();
       const allImages = []; let failed = 0;
+
+      if (currentCoverUrl) {
+        try {
+          const r = await fetch('/api/image?url=' + encodeURIComponent(currentCoverUrl));
+          if (r.ok) {
+            const blob = await r.blob();
+            const base64 = await blobToBase64(blob);
+            const ext = currentCoverUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
+            allImages.push({ data: base64, ext });
+          }
+        } catch (_) {}
+      }
+
       showLoading('Tüm bölümler taranıyor... 0/' + chapters.length);
       for (let i = 0; i < chapters.length; i++) {
         $('loading-text').textContent = `Taranıyor... ${i + 1}/${chapters.length}${failed > 0 ? ` (${failed} hatalı)` : ''}`;
