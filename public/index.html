@@ -518,7 +518,8 @@
       // Revoke old blob URLs to prevent memory leak
       _blobUrls.forEach(u => URL.revokeObjectURL(u));
       _blobUrls = [];
-      const decodedUrl = localMode ? cUrl : safeDecode(cUrl);
+      let decodedUrl;
+      try { decodedUrl = safeDecode(cUrl); } catch (e) { decodedUrl = cUrl; }
       currentChapterUrl = decodedUrl;
       chapterIndex = chaptersList.findIndex(c => c.href === decodedUrl);
       currentChapterReferer = localMode ? mUrl : safeDecode(mUrl);
