@@ -415,10 +415,16 @@ app.post('/api/download-images', async (req, res) => {
 
     for (let i = 0; i < images.length; i++) {
       try {
-        const url = images[i].url || images[i];
-        const referer = images[i].referer || url;
-        const data = await fetchImageWithRetry(url, referer);
-        const ext = url.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
+        let data, ext;
+        if (images[i].data) {
+          data = Buffer.from(images[i].data, 'base64');
+          ext = images[i].ext || 'jpg';
+        } else {
+          const url = images[i].url || images[i];
+          const referer = images[i].referer || url;
+          data = await fetchImageWithRetry(url, referer);
+          ext = url.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
+        }
         downloaded.push({ data, ext, idx: i });
       } catch (_) {}
     }

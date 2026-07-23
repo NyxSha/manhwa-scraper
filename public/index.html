@@ -174,7 +174,7 @@
 
     let currentPageUrl = '', currentSiteUrl = '', currentMangaUrl = '', currentChapterReferer = '';
     let currentMangaList = [], chaptersList = [], chapterIndex = -1, currentChapterImages = [];
-    let currentMangaTitle = '', currentCoverUrl = '', _blobUrls = [], _currentSiteOrigin = '';
+    let currentMangaTitle = '', currentCoverUrl = '', _blobUrls = [], _currentSiteOrigin = '', _localChapterData = null;
 
     function $(id) { return document.getElementById(id); }
 
@@ -189,6 +189,15 @@
     function showLoading(text) { $('loading-text').textContent = text || 'Yükleniyor...'; $('loading-overlay').classList.add('active'); }
     function hideLoading() { $('loading-overlay').classList.remove('active'); }
     function setProgress(pct) { $('progress-fill').style.width = Math.min(pct, 100) + '%'; }
+
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
 
     function formatSize(bytes) {
       if (bytes < 1024) return bytes + ' B';
@@ -554,6 +563,8 @@
         if (localCh?.images?.length > 0) {
           hideLoading();
           currentChapterImages = localCh.images.map(i => i.url);
+          _localChapterData = localCh.images;
+          $('reader-save-btn').classList.add('hidden');
           // Show as online URLs but with local blob fallback
           for (const img of localCh.images) {
             const el = document.createElement('img');
@@ -892,12 +903,37 @@
       hideLoading();
     }
 
-    // ---- Download CBZ (unchanged) ----
-    function downloadCurrentChapter() {
+    // ---- Download CBZ ----
+    async function downloadCurrentChapter() {
       if (currentChapterImages.length === 0) { toast('Önce bölümü açın.', 'error'); return; }
       const manga = decodeURIComponent(currentMangaUrl.split('/').filter(Boolean).pop() || '');
       const title = $('reader-chapter-title').textContent || 'Bölüm';
       const filename = [manga, title].filter(Boolean).join(' - ').replace(/\s+/g, ' ').trim() || 'chapter';
+
+      if (_localChapterData?.length > 0) {
+        showLoading('CBZ hazırlanıyor...');
+        const imageData = [];
+        for (let i = 0; i < _localChapterData.length; i++) {
+          const img = _localChapterData[i];
+          if (img.data) {
+            const base64 = await blobToBase64(img.data);
+            const ext = img.url.match(/\.(\w+)(\?|$)/)?.[1] || 'jpg';
+            imageData.push({ data: base64, ext, idx: i });
+          }
+        }
+        try {
+          const r = await fetch('/api/download-images', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ images: imageData, filename })
+          });
+          if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Hata'); }
+          const blob = await r.blob();
+          hideLoading(); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename + '.cbz'; a.click(); URL.revokeObjectURL(a.href);
+          toast('CBZ tamam!', 'success');
+        } catch (e) { hideLoading(); toast('Hata: ' + e.message, 'error'); }
+        return;
+      }
+
       const images = currentChapterImages.map(url => ({ url, referer: currentChapterReferer }));
       showLoading('CBZ hazırlanıyor...');
       fetch('/api/download-images', {
